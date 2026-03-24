@@ -13,6 +13,7 @@ export default function Home() {
   const [user, setUser] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [vacanzaAttiva, setVacanzaAttiva] = useState(false)
+  const [phrases, setPhrases] = useState([])
 
   function calculateBAC(user, drinks, now = Date.now()) {
     const K = 0.11
@@ -92,6 +93,19 @@ export default function Home() {
     return 'LEGGENDA'
   }
 
+  function getPhrase(category) {
+    const normalizedCategory = category?.trim().toUpperCase()
+
+    const matchingPhrases = phrases.filter(
+      (phrase) => phrase.category?.trim().toUpperCase() === normalizedCategory
+    )
+
+    if (matchingPhrases.length === 0) return category
+
+    const randomIndex = Math.floor(Math.random() * matchingPhrases.length)
+    return matchingPhrases[randomIndex].text || category
+  }
+
   function getSoberCountdown(bac) {
     if (bac <= 0) return 'Sobrio'
 
@@ -140,6 +154,13 @@ export default function Home() {
 
       setDrinks(drinksData || [])
 
+      const { data: phrasesData } = await supabase
+        .from('phrases')
+        .select('*')
+        .eq('is_active', true)
+
+      setPhrases(phrasesData || [])
+
       await loadLogs(userId)
       await loadUser(userId)
 
@@ -168,6 +189,7 @@ export default function Home() {
     : 0
 
   const stato = getState(bac)
+  const fraseCorrente = getPhrase(stato)
   const soberText = getSoberCountdown(bac)
 
   const maxBac = 2.0
@@ -232,6 +254,10 @@ export default function Home() {
               {user ? user.nickname : 'Utente'}
             </div>
 
+            <div className={styles.menuWarning}>
+              Non cambiare utente se non necessario
+            </div>
+
             <button onClick={handleSwitchUser}>Cambia utente</button>
 
             <button onClick={() => router.push('/group')}>
@@ -252,7 +278,7 @@ export default function Home() {
       </header>
 
       <section className={styles.bacSection}>
-        <p className={styles.stateLabel}>{stato}</p>
+        <p className={styles.stateLabel}>{fraseCorrente}</p>
 
         <div className={styles.gaugeWrap}>
           <svg
@@ -320,9 +346,9 @@ export default function Home() {
           {displayedLogs.map((log) => {
             const drink = drinks.find((d) => String(d.id) === String(log.drink_id))
 
-
             const fillPercent = Math.max(0, Math.min((bac / maxBac) * 100, 100))
             const redStartPercent = (redStart / maxBac) * 100
+
             return (
               <li key={log.id}>
                 {drink?.emoji} {drink?.name} —{' '}
