@@ -205,7 +205,14 @@ export default function Home() {
   }
 
   function handleSwitchUser() {
+    const confirmed = window.confirm(
+      'Non cambiare utente se non necessario.\n\nSei sicuro di voler continuare? Potresti creare confusione nei test o nei dati salvati.'
+    )
+
+    if (!confirmed) return
+
     localStorage.removeItem('user_id')
+    setMenuOpen(false)
     router.push('/')
   }
 
