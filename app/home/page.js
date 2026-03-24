@@ -200,6 +200,74 @@ export default function Home() {
 
   const displayedLogs = useMemo(() => logs.slice(0, 5), [logs])
 
+  function getDayStart(now = new Date()) {
+    const current = new Date(now)
+
+    const start = new Date(current)
+    start.setHours(8, 0, 0, 0)
+
+    if (current.getHours() < 8) {
+      start.setDate(start.getDate() - 1)
+    }
+
+    return start
+  }
+
+  async function updateDailyBacPeak(userId, updatedLogs) {
+    if (!user) return
+
+    const bacDrinks = updatedLogs
+      .map((log) => {
+        const drink = drinks.find((d) => String(d.id) === String(log.drink_id))
+        if (!drink) return null
+
+        return {
+          volumeMl: drink.volume_ml,
+          abv: drink.perc_alc,
+          timestamp: new Date(log.created_at).getTime()
+        }
+      })
+      .filter(Boolean)
+
+    const currentBac = calculateBAC(
+      {
+        weightKg: user.peso_kg,
+        heightCm: user.altezza_cm
+      },
+      bacDrinks
+    )
+
+    const now = new Date()
+    const dayStart = getDayStart(now).toISOString()
+
+    const { data: existingPeak } = await supabase
+      .from('daily_bac_peaks')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('day_start', dayStart)
+      .maybeSingle()
+
+    if (!existingPeak) {
+      await supabase.from('daily_bac_peaks').insert({
+        user_id: userId,
+        day_start: dayStart,
+        peak_bac: currentBac,
+        peak_time: now.toISOString()
+      })
+      return
+    }
+
+    if (currentBac > Number(existingPeak.peak_bac || 0)) {
+      await supabase
+        .from('daily_bac_peaks')
+        .update({
+          peak_bac: currentBac,
+          peak_time: now.toISOString()
+        })
+        .eq('id', existingPeak.id)
+    }
+  }
+
   async function handleDrinkClick(drinkId) {
     const userId = localStorage.getItem('user_id')
     if (!userId) return
@@ -211,7 +279,15 @@ export default function Home() {
 
     if (navigator.vibrate) navigator.vibrate(35)
 
-    await loadLogs(userId)
+    const { data: updatedLogs } = await supabase
+      .from('drink_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+
+    setLogs(updatedLogs || [])
+
+    await updateDailyBacPeak(userId, updatedLogs || [])
   }
 
   async function handleUndo() {
