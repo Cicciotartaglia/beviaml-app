@@ -1,0 +1,192 @@
+.page {
+  min-height: 100vh;
+  background: #000;
+  color: #fff;
+  padding: 20px 18px 32px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: flex-end;
+  position: relative;
+  margin-bottom: 24px;
+}
+
+.menuButton {
+  background: transparent;
+  color: #fff;
+  border: none;
+  font-size: 28px;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+
+.menuDropdown {
+  position: absolute;
+  top: 42px;
+  right: 0;
+  width: 180px;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 10;
+}
+
+.menuDropdown button {
+  background: #1a1a1a;
+  color: #fff;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.menuDropdown button:disabled {
+  opacity: 0.45;
+}
+
+.menuNickname {
+  color: #cfcfcf;
+  font-size: 14px;
+  padding: 4px 2px 10px;
+  border-bottom: 1px solid #222;
+  margin-bottom: 4px;
+}
+
+.bacSection {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.stateLabel {
+  font-size: 14px;
+  letter-spacing: 0.12em;
+  color: #d0d0d0;
+  margin-bottom: 10px;
+}
+
+.gaugeWrap {
+  width: 100%;
+  max-width: 340px;
+  margin: 0 auto 8px;
+}
+
+.gauge {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.gaugeBase {
+  fill: none;
+  stroke: #171717;
+  stroke-width: 18;
+  stroke-linecap: round;
+}
+
+.gaugeFill {
+  fill: none;
+  stroke: #e7e7e7;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s ease;
+}
+
+.gaugeRedBase {
+  fill: none;
+  stroke: #2c1010;
+  stroke-width: 18;
+  stroke-linecap: round;
+}
+
+.gaugeRedFill {
+  fill: none;
+  stroke: #d22;
+  stroke-width: 12;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.25s ease;
+}
+
+.bacValue {
+  font-size: 56px;
+  font-weight: 700;
+  line-height: 1;
+  margin-top: 4px;
+}
+
+.soberText {
+  color: #bdbdbd;
+  font-size: 15px;
+  margin-top: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 28px 0;
+}
+
+.drinkButton {
+  height: 78px;
+  border-radius: 18px;
+  border: 1px solid #262626;
+  background: #141414;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  align-items: center;
+  cursor: pointer;
+  transition: transform 0.08s ease, background 0.12s ease;
+}
+
+.drinkButton:active {
+  transform: scale(0.98);
+  background: #0f0f0f;
+}
+
+.drinkEmoji {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.drinkName {
+  font-size: 15px;
+  color: #f2f2f2;
+}
+
+.logsSection {
+  margin-top: 10px;
+}
+
+.logsTitle {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f0f0f0;
+  margin-bottom: 12px;
+}
+
+.logsList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.logItem {
+  display: flex;
+  justify-content: space-between;
+  color: #c8c8c8;
+  font-size: 14px;
+  border-bottom: 1px solid #151515;
+  padding-bottom: 8px;
+}
