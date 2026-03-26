@@ -16,8 +16,9 @@ export default function Home() {
   const [phrases, setPhrases] = useState([])
 
   function calculateBAC(user, drinks, now = Date.now()) {
-    const K = 0.11
+    const K = 0.13
     const LOOKBACK_HOURS = 12
+    const LOOKBACK_MS = LOOKBACK_HOURS * 60 * 60 * 1000
 
     const weightKg = user.weightKg
     const heightCm = user.heightCm
@@ -28,19 +29,39 @@ export default function Home() {
     let r = 1.0181 - 0.01213 * bmi
     r = Math.max(0.45, Math.min(0.85, r))
 
+    // prendo solo i drink nelle ultime 12h
+    const validDrinks = drinks
+      .filter((drink) => {
+        const diff = now - drink.timestamp
+        return diff >= 0 && diff <= LOOKBACK_MS
+      })
+      .sort((a, b) => a.timestamp - b.timestamp)
+
+    if (validDrinks.length === 0) return 0
+
     let bac = 0
+    let lastTimestamp = validDrinks[0].timestamp
 
-    for (const drink of drinks) {
-      const hoursSinceDrink = (now - drink.timestamp) / 3600000
+    for (let i = 0; i < validDrinks.length; i++) {
+      const drink = validDrinks[i]
 
-      if (hoursSinceDrink < 0 || hoursSinceDrink > LOOKBACK_HOURS) continue
+      // smaltimento tra un drink e l'altro
+      if (i > 0) {
+        const hoursPassed = (drink.timestamp - lastTimestamp) / 3600000
+        bac = Math.max(0, bac - K * hoursPassed)
+      }
 
+      // aggiunta drink
       const grams = drink.volumeMl * (drink.abv / 100) * 0.789
       const deltaBAC = grams / (r * weightKg)
-      const contribution = Math.max(0, deltaBAC - K * hoursSinceDrink)
 
-      bac += contribution
+      bac += deltaBAC
+      lastTimestamp = drink.timestamp
     }
+
+    // smaltimento finale fino ad adesso
+    const finalHoursPassed = (now - lastTimestamp) / 3600000
+    bac = Math.max(0, bac - K * finalHoursPassed)
 
     return Math.max(0, bac)
   }
