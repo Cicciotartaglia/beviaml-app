@@ -16,9 +16,8 @@ export default function Home() {
   const [phrases, setPhrases] = useState([])
 
   function calculateBAC(user, drinks, now = Date.now()) {
-    const K = 0.13
+    const K = 0.11
     const LOOKBACK_HOURS = 12
-    const LOOKBACK_MS = LOOKBACK_HOURS * 60 * 60 * 1000
 
     const weightKg = user.weightKg
     const heightCm = user.heightCm
@@ -29,35 +28,19 @@ export default function Home() {
     let r = 1.0181 - 0.01213 * bmi
     r = Math.max(0.45, Math.min(0.85, r))
 
-    const validDrinks = drinks
-      .filter((drink) => {
-        const diff = now - drink.timestamp
-        return diff >= 0 && diff <= LOOKBACK_MS
-      })
-      .sort((a, b) => a.timestamp - b.timestamp)
-
-    if (validDrinks.length === 0) return 0
-
     let bac = 0
-    let lastTimestamp = validDrinks[0].timestamp
 
-    for (let i = 0; i < validDrinks.length; i++) {
-      const drink = validDrinks[i]
+    for (const drink of drinks) {
+      const hoursSinceDrink = (now - drink.timestamp) / 3600000
 
-      if (i > 0) {
-        const hoursPassed = (drink.timestamp - lastTimestamp) / 3600000
-        bac = Math.max(0, bac - K * hoursPassed)
-      }
+      if (hoursSinceDrink < 0 || hoursSinceDrink > LOOKBACK_HOURS) continue
 
       const grams = drink.volumeMl * (drink.abv / 100) * 0.789
       const deltaBAC = grams / (r * weightKg)
+      const contribution = Math.max(0, deltaBAC - K * hoursSinceDrink)
 
-      bac += deltaBAC
-      lastTimestamp = drink.timestamp
+      bac += contribution
     }
-
-    const finalHoursPassed = (now - lastTimestamp) / 3600000
-    bac = Math.max(0, bac - K * finalHoursPassed)
 
     return Math.max(0, bac)
   }
@@ -126,7 +109,7 @@ export default function Home() {
   function getSoberCountdown(bac) {
     if (bac <= 0) return 'Sobrio'
 
-    const hours = bac / 0.13
+    const hours = bac / 0.11
     const totalMinutes = Math.ceil(hours * 60)
 
     const hh = String(Math.floor(totalMinutes / 60)).padStart(2, '0')
@@ -420,7 +403,7 @@ export default function Home() {
           <button
             key={drink.id}
             className={styles.drinkButton}
-            onClick={handleDrinkClick(drink.id)}
+            onClick={() => handleDrinkClick(drink.id)}
           >
             <span>{drink.emoji}</span>
             <span>{drink.name}</span>
