@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
+import BacGaugeRound from '../../components/BacGaugeRound'
 import styles from './home.module.css'
 
 export default function Home() {
@@ -29,7 +30,6 @@ export default function Home() {
     let r = 1.0181 - 0.01213 * bmi
     r = Math.max(0.45, Math.min(0.85, r))
 
-    // prendo solo i drink nelle ultime 12h
     const validDrinks = drinks
       .filter((drink) => {
         const diff = now - drink.timestamp
@@ -45,13 +45,11 @@ export default function Home() {
     for (let i = 0; i < validDrinks.length; i++) {
       const drink = validDrinks[i]
 
-      // smaltimento tra un drink e l'altro
       if (i > 0) {
         const hoursPassed = (drink.timestamp - lastTimestamp) / 3600000
         bac = Math.max(0, bac - K * hoursPassed)
       }
 
-      // aggiunta drink
       const grams = drink.volumeMl * (drink.abv / 100) * 0.789
       const deltaBAC = grams / (r * weightKg)
 
@@ -59,7 +57,6 @@ export default function Home() {
       lastTimestamp = drink.timestamp
     }
 
-    // smaltimento finale fino ad adesso
     const finalHoursPassed = (now - lastTimestamp) / 3600000
     bac = Math.max(0, bac - K * finalHoursPassed)
 
@@ -212,12 +209,6 @@ export default function Home() {
   const stato = getState(bac)
   const fraseCorrente = getPhrase(stato)
   const soberText = getSoberCountdown(bac)
-
-  const maxBac = 2.0
-  const redStart = 1.4
-
-  const fillPercent = Math.max(0, Math.min((bac / maxBac) * 100, 100))
-  const redStartPercent = (redStart / maxBac) * 100
 
   const displayedLogs = useMemo(() => logs.slice(0, 5), [logs])
 
@@ -377,46 +368,7 @@ export default function Home() {
       <section className={styles.bacSection}>
         <p className={styles.stateLabel}>{fraseCorrente}</p>
 
-        <div className={styles.gaugeWrap}>
-          <svg
-            viewBox="0 0 320 120"
-            className={styles.gauge}
-            aria-label="BAC gauge"
-          >
-            <path
-              d="M20 100 L95 25 L260 25 L300 25"
-              className={styles.gaugeBase}
-            />
-
-            <path
-              d="M20 100 L95 25 L260 25"
-              className={styles.gaugeFill}
-              style={{
-                strokeDasharray: '400',
-                strokeDashoffset: `${400 - (Math.min(fillPercent, redStartPercent) / 100) * 400}`
-              }}
-            />
-
-            <path
-              d="M260 25 L300 25"
-              className={styles.gaugeRedBase}
-            />
-
-            {fillPercent > redStartPercent && (
-              <path
-                d="M260 25 L300 25"
-                className={styles.gaugeRedFill}
-                style={{
-                  strokeDasharray: '60',
-                  strokeDashoffset: `${60 - ((fillPercent - redStartPercent) / (100 - redStartPercent)) * 60}`
-                }}
-              />
-            )}
-          </svg>
-        </div>
-
-        <div className={styles.bacValue}>{bac.toFixed(2)}</div>
-        <div className={styles.soberText}>{soberText}</div>
+        <BacGaugeRound bac={bac} soberText={soberText} />
       </section>
 
       <section className={styles.grid}>
@@ -442,9 +394,6 @@ export default function Home() {
         <ul>
           {displayedLogs.map((log) => {
             const drink = drinks.find((d) => String(d.id) === String(log.drink_id))
-
-            const fillPercent = Math.max(0, Math.min((bac / maxBac) * 100, 100))
-            const redStartPercent = (redStart / maxBac) * 100
 
             return (
               <li key={log.id}>
