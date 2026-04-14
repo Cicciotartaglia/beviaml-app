@@ -149,7 +149,7 @@ export default function BacGaugeRound({ bac, soberText }: Props) {
                 style={{
                     position: 'relative',
                     width: 320,
-                    height: 280,
+                    height: 250,
                     margin: '0 auto'
                 }}
             >
@@ -218,7 +218,7 @@ export default function BacGaugeRound({ bac, soberText }: Props) {
                         top: 110,
                         width: '100%',
                         fontSize: 42,
-                        fontWeight: 700,
+                        fontWeight: 800,
                         color: 'white'
                     }}
                 >
