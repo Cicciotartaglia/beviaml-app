@@ -88,7 +88,9 @@ export default function Register() {
   return (
     <main className={styles.page}>
       <div className={styles.card}>
-        <h1 className={styles.title}>Bastardi mussulmani, complletate i vostri dati</h1>
+        <h1 className={styles.title}>
+          {isNewUser ? 'Completate i dati, brutti Froci ' : 'Benvenuti mussulmani'}
+        </h1>
 
         <input
           placeholder="Nickname"
