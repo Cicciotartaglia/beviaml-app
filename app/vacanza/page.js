@@ -310,13 +310,14 @@ export default function VacanzaPage() {
         return best
     }
 
-    function formatTime(timestamp) {
+    function formatDateTime(timestamp) {
         if (!timestamp) return '—'
 
-        return new Date(timestamp).toLocaleTimeString('it-IT', {
+        return new Date(timestamp).toLocaleString('it-IT', {
+            weekday: 'long',
+            day: 'numeric',
             hour: '2-digit',
-            minute: '2-digit',
-            timeZone: 'Europe/Athens'
+            minute: '2-digit'
         })
     }
 
@@ -412,7 +413,7 @@ export default function VacanzaPage() {
                     {entry.peakBac.toFixed(2)}
                 </div>
                 <div style={{ opacity: 0.8 }}>
-                    Picco alle {formatTime(entry.peakTime)}
+                    Picco {formatTime(entry.peakTime)}
                 </div>
             </div>
         )
