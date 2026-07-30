@@ -310,7 +310,7 @@ export default function VacanzaPage() {
         return best
     }
 
-    function formatDateTime(timestamp) {
+    function formatTime(timestamp) {
         if (!timestamp) return '—'
 
         return new Date(timestamp).toLocaleString('it-IT', {
