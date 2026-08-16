@@ -1,192 +1,646 @@
+/* ==========================================================================
+   HOME V2
+   ========================================================================== */
+
 .page {
   min-height: 100vh;
   background: #000;
-  color: #fff;
-  padding: 20px 18px 32px;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #f5f5f7;
+
+  padding:
+    24px 18px 70px;
+
+  font-family:
+    -apple-system,
+    BlinkMacSystemFont,
+    "SF Pro Display",
+    "SF Pro Text",
+    Arial,
+    sans-serif;
 }
 
+
+/* ==========================================================================
+   HEADER
+   ========================================================================== */
+
 .header {
+  position: relative;
+
   display: flex;
   justify-content: flex-end;
-  position: relative;
-  margin-bottom: 24px;
+
+  max-width: 760px;
+  margin: 0 auto;
 }
 
 .menuButton {
-  background: transparent;
-  color: #fff;
-  border: none;
-  font-size: 28px;
+  width: 48px;
+  height: 48px;
+
+  border: 1px solid #252527;
+  border-radius: 50%;
+
+  background: #101012;
+  color: #f5f5f7;
+
+  font-size: 22px;
+
   cursor: pointer;
-  padding: 4px 8px;
 }
 
 .menuDropdown {
   position: absolute;
-  top: 42px;
+  top: 58px;
   right: 0;
-  width: 180px;
-  background: #111;
-  border: 1px solid #2a2a2a;
-  border-radius: 16px;
+
+  z-index: 100;
+
+  width: 210px;
+
   padding: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 10;
+
+  border: 1px solid #2a2a2d;
+  border-radius: 18px;
+
+  background: #111113;
+
+  box-shadow:
+    0 16px 40px rgba(0, 0, 0, 0.55);
 }
 
 .menuDropdown button {
-  background: #1a1a1a;
-  color: #fff;
-  border: 1px solid #2a2a2a;
-  border-radius: 12px;
-  padding: 10px 12px;
+  display: block;
+
+  width: 100%;
+
+  padding: 12px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background: transparent;
+  color: #f5f5f7;
+
   text-align: left;
+  font-size: 15px;
+
+  cursor: pointer;
 }
 
-.menuDropdown button:disabled {
-  opacity: 0.45;
+.menuDropdown button:hover {
+  background: #1c1c1f;
 }
 
 .menuNickname {
-  color: #cfcfcf;
-  font-size: 14px;
-  padding: 4px 2px 10px;
-  border-bottom: 1px solid #222;
-  margin-bottom: 4px;
+  padding:
+    8px 12px 4px;
+
+  font-size: 18px;
+  font-weight: 600;
 }
 
-.bacSection {
-  text-align: center;
-  margin-bottom: 28px;
+.menuWarning {
+  padding:
+    2px 12px 10px;
+
+  color: #8e8e93;
+  font-size: 12px;
 }
 
-.stateLabel {
-  font-size: 22px;
-  letter-spacing: 0.12em;
-  color: #d0d0d0;
-  margin-bottom: 12px;
+
+/* ==========================================================================
+   FRASE
+   ========================================================================== */
+
+.phraseSection {
+  max-width: 760px;
+
+  margin:
+    16px auto 28px;
 }
 
-.gaugeWrap {
-  width: 100%;
-  max-width: 340px;
-  margin: 0 auto 8px;
+.phrase {
+  max-width: 620px;
+
+  margin: 0;
+
+  font-size:
+    clamp(32px,
+      7vw,
+      46px);
+
+  line-height: 1.08;
+
+  font-weight: 700;
+
+  letter-spacing:
+    -0.035em;
 }
 
-.gauge {
-  width: 100%;
-  height: auto;
-  display: block;
+.phraseAccent {
+  width: 42px;
+  height: 3px;
+
+  margin-top: 18px;
+
+  border-radius: 100px;
+
+  background: #bf5af2;
 }
 
-.gaugeBase {
-  fill: none;
-  stroke: #171717;
-  stroke-width: 18;
-  stroke-linecap: round;
+
+/* ==========================================================================
+   CARD BAC
+   ========================================================================== */
+
+.bacCard {
+  max-width: 760px;
+
+  margin:
+    0 auto;
+
+  padding:
+    22px;
+
+  border:
+    1px solid #262628;
+
+  border-radius:
+    24px;
+
+  background:
+    #0b0b0d;
 }
 
-.gaugeFill {
-  fill: none;
-  stroke: #e7e7e7;
-  stroke-width: 12;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.25s ease;
+.bacHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 20px;
 }
 
-.gaugeRedBase {
-  fill: none;
-  stroke: #2c1010;
-  stroke-width: 18;
-  stroke-linecap: round;
-}
+.bacLabel {
+  color: #98989d;
 
-.gaugeRedFill {
-  fill: none;
-  stroke: #d22;
-  stroke-width: 12;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.25s ease;
+  font-size: 13px;
+  font-weight: 500;
+
+  letter-spacing: 0.04em;
 }
 
 .bacValue {
-  font-size: 56px;
-  font-weight: 700;
-  line-height: 1;
   margin-top: 4px;
+
+  font-size:
+    clamp(64px,
+      17vw,
+      92px);
+
+  line-height: 0.95;
+
+  font-weight: 600;
+
+  letter-spacing:
+    -0.055em;
 }
 
-.soberText {
-  color: #bdbdbd;
-  font-size: 15px;
-  margin-top: 8px;
+.bacStatus {
+  display: flex;
+  align-items: center;
+
+  gap: 8px;
+
+  margin-top: 12px;
+
+  font-size: 16px;
+  font-weight: 600;
 }
+
+.statusDot {
+  width: 10px;
+  height: 10px;
+
+  border-radius: 50%;
+
+  background:
+    currentColor;
+}
+
+
+/* ==========================================================================
+   COLORI STATO BAC
+   ========================================================================== */
+
+.statusSober {
+  color: #30d158;
+}
+
+.statusMedium {
+  color: #ffd60a;
+}
+
+.statusHigh {
+  color: #ff9f0a;
+}
+
+.statusVeryHigh {
+  color: #ff453a;
+}
+
+.statusLegend {
+  color: #d33939;
+}
+
+
+/* ==========================================================================
+   BOX "RITORNO A ZERO"
+   ========================================================================== */
+
+.soberBox {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding:
+    12px 14px;
+
+  border:
+    1px solid #222225;
+
+  border-radius:
+    16px;
+
+  background:
+    #111113;
+}
+
+.soberIcon {
+  color: #8e8e93;
+  font-size: 22px;
+}
+
+.soberLabel {
+  color: #98989d;
+
+  font-size: 12px;
+}
+
+.soberValue {
+  margin-top: 2px;
+
+  font-size: 20px;
+  font-weight: 600;
+}
+
+
+/* ==========================================================================
+   SCALA BAC
+   ========================================================================== */
+
+.scaleWrapper {
+  margin-top: 28px;
+}
+
+.scale {
+  position: relative;
+
+  height: 5px;
+
+  margin:
+    0 4px;
+
+  border-radius:
+    100px;
+
+  background:
+    #262629;
+}
+
+.scaleGradient {
+  position: absolute;
+  inset: 0;
+
+  border-radius:
+    inherit;
+
+  background:
+    linear-gradient(to right,
+      #30d158 0%,
+      #30d158 7%,
+      #ffd60a 7%,
+      #ffd60a 20%,
+      #ff9f0a 20%,
+      #ff9f0a 40%,
+      #ff453a 40%,
+      #ff453a 67%,
+      #8f2525 67%,
+      #8f2525 100%);
+
+  opacity: 0.9;
+}
+
+.scaleMarker {
+  position: absolute;
+  top: 50%;
+
+  width: 22px;
+  height: 22px;
+
+  border-radius: 50%;
+
+  background:
+    #f5f5f7;
+
+  box-shadow:
+    0 1px 5px rgba(0, 0, 0, 0.5);
+
+  transform:
+    translate(-50%,
+      -50%);
+
+  transition:
+    left 300ms ease;
+}
+
+.scaleLabels {
+  display: flex;
+  justify-content:
+    space-between;
+
+  margin-top: 12px;
+
+  color: #8e8e93;
+
+  font-size: 12px;
+}
+
+
+/* ==========================================================================
+   SEZIONI GENERICHE
+   ========================================================================== */
+
+.drinksSection,
+.logsSection {
+  max-width: 760px;
+
+  margin:
+    30px auto 0;
+}
+
+.sectionTitle {
+  margin:
+    0 0 14px;
+
+  font-size: 22px;
+
+  font-weight: 600;
+
+  letter-spacing:
+    -0.02em;
+}
+
+
+/* ==========================================================================
+   PULSANTI DRINK
+   ========================================================================== */
 
 .grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin: 28px 0;
-}
 
-.drinkButton {
-  height: 78px;
-  border-radius: 18px;
-  border: 1px solid #262626;
-  background: #141414;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 4px;
-  align-items: center;
-  cursor: pointer;
-  transition: transform 0.08s ease, background 0.12s ease;
-}
+  grid-template-columns:
+    repeat(2,
+      minmax(0, 1fr));
 
-.drinkButton:active {
-  transform: scale(0.98);
-  background: #0f0f0f;
-}
-
-.drinkEmoji {
-  font-size: 22px;
-  line-height: 1;
-}
-
-.drinkName {
-  font-size: 15px;
-  color: #f2f2f2;
-}
-
-.logsSection {
-  margin-top: 10px;
-}
-
-.logsTitle {
-  font-size: 16px;
-  font-weight: 600;
-  color: #f0f0f0;
-  margin-bottom: 12px;
-}
-
-.logsList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
 }
 
-.logItem {
+.drinkButton {
   display: flex;
-  justify-content: space-between;
-  color: #c8c8c8;
+  flex-direction:
+    column;
+
+  align-items: center;
+  justify-content: center;
+
+  min-height: 128px;
+
+  padding: 16px;
+
+  border:
+    1px solid #252528;
+
+  border-radius:
+    22px;
+
+  background:
+    #0d0d0f;
+
+  color:
+    #f5f5f7;
+
+  cursor: pointer;
+
+  transition:
+    transform 100ms ease,
+    background 100ms ease;
+}
+
+.drinkButton:active {
+  transform:
+    scale(0.97);
+
+  background:
+    #151518;
+}
+
+.drinkEmoji {
+  font-size: 32px;
+}
+
+.drinkName {
+  margin-top: 8px;
+
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.drinkDetails {
+  margin-top: 4px;
+
+  color: #8e8e93;
+
   font-size: 14px;
-  border-bottom: 1px solid #151515;
-  padding-bottom: 8px;
+}
+
+
+/* ==========================================================================
+   ANNULLA
+   ========================================================================== */
+
+.undoButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 10px;
+
+  width: 100%;
+
+  margin-top: 10px;
+
+  padding:
+    15px;
+
+  border:
+    1px solid #242427;
+
+  border-radius:
+    18px;
+
+  background:
+    #0b0b0d;
+
+  color:
+    #c7c7cc;
+
+  font-size: 15px;
+
+  cursor: pointer;
+}
+
+.undoButton:active {
+  background:
+    #151518;
+}
+
+
+/* ==========================================================================
+   STORICO
+   ========================================================================== */
+
+.logsList {
+  overflow: hidden;
+
+  border:
+    1px solid #222225;
+
+  border-radius:
+    20px;
+
+  background:
+    #0b0b0d;
+}
+
+.logRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  min-height: 52px;
+
+  padding:
+    0 16px;
+
+  border-bottom:
+    1px solid #1d1d20;
+}
+
+.logRow:last-child {
+  border-bottom: 0;
+}
+
+.logDrink {
+  display: flex;
+  align-items: center;
+
+  gap: 12px;
+
+  font-size: 16px;
+}
+
+.logEmoji {
+  width: 30px;
+
+  text-align: center;
+
+  font-size: 22px;
+}
+
+.logTime {
+  color: #aeaeb2;
+
+  font-size: 15px;
+
+  font-variant-numeric:
+    tabular-nums;
+}
+
+.emptyLogs {
+  padding:
+    22px;
+
+  color: #8e8e93;
+
+  text-align: center;
+}
+
+
+/* ==========================================================================
+   MOBILE
+   ========================================================================== */
+
+@media (max-width: 600px) {
+  .page {
+    padding:
+      18px 16px 60px;
+  }
+
+  .phraseSection {
+    margin-top: 12px;
+  }
+
+  .bacCard {
+    padding: 18px;
+    border-radius: 22px;
+  }
+
+  .bacHeader {
+    /*
+     * Su schermi stretti lasciamo comunque
+     * BAC e timer affiancati finché possibile.
+     */
+    gap: 12px;
+  }
+
+  .soberBox {
+    padding:
+      10px 11px;
+  }
+
+  .soberValue {
+    font-size: 16px;
+  }
+
+  .drinkButton {
+    min-height: 118px;
+  }
+}
+
+
+/* ==========================================================================
+   MOBILE MOLTO STRETTO
+   ========================================================================== */
+
+@media (max-width: 390px) {
+  .bacHeader {
+    flex-direction:
+      column;
+  }
+
+  .soberBox {
+    width: 100%;
+  }
 }

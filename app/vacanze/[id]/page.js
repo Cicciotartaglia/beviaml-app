@@ -1,7 +1,10 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import {
+    useParams,
+    useRouter
+} from 'next/navigation'
 
 import {
     CartesianGrid,
@@ -16,12 +19,21 @@ import {
     YAxis
 } from 'recharts'
 
-import { supabase } from '../../lib/supabase'
 import {
     TABLES,
-    ACTIVE_DATASET_NAME
-} from '../../lib/tableNames'
-import styles from './vacanza.module.css'
+    VACATIONS
+} from '../../../lib/tableNames'
+
+import { supabase } from '../../../lib/supabase'
+
+/*
+ * Riutilizziamo ESATTAMENTE lo stesso CSS
+ * della pagina Vacanza corrente.
+ *
+ * In questo modo eventuali miglioramenti grafici futuri
+ * verranno applicati automaticamente anche all'archivio.
+ */
+import styles from '../../vacanza/vacanza.module.css'
 
 /*
 ===============================================================================
@@ -84,6 +96,29 @@ all'orario in cui sono state registrate.
 export default function VacanzaPage() {
     const router = useRouter()
 
+    /*
+ * Recuperiamo la parte dinamica dell'URL.
+ *
+ * Esempio:
+ *
+ * /vacanze/creta_2026
+ *
+ * produce:
+ *
+ * id = "creta_2026"
+ */
+    const params = useParams()
+
+    const vacationId =
+        params.id
+
+    /*
+     * Cerchiamo la configurazione corrispondente
+     * dentro VACATIONS.
+     */
+    const vacation =
+        VACATIONS[vacationId]
+
     // ==========================================================================
     // CONFIGURAZIONE VACANZA
     // ==========================================================================
@@ -95,33 +130,23 @@ export default function VacanzaPage() {
      * Quando realizzeremo "Archivio vacanze", questi dati
      * verranno probabilmente recuperati da una configurazione.
      */
-    /*
- * Titolo mostrato nella pagina della vacanza corrente.
- *
- * Durante lo sviluppo, se stiamo utilizzando
- * le tabelle _test, mostriamo chiaramente
- * che siamo nell'ambiente di prova.
- *
- * In questo modo non confondiamo mai
- * i dati di test con una vera vacanza.
- */
-    const VACANZA_TITLE =
-        ACTIVE_DATASET_NAME === 'test'
-            ? 'VACANZA TEST'
-            : ACTIVE_DATASET_NAME === 'limbo'
-                ? 'LIMBO'
-                : 'VACANZA'
-
-    const VACANZA_START = '2026-03-09T12:00:00'
+    // ==========================================================================
+    // CONFIGURAZIONE VACANZA ARCHIVIATA
+    // ==========================================================================
 
     /*
-     * Timezone utilizzato per raggruppare correttamente
-     * le giornate della vacanza di Creta.
+     * Tutte queste informazioni arrivano da:
      *
-     * Anche questo diventerà configurabile quando realizzeremo
-     * un vero sistema multi-vacanza.
+     * lib/tableNames.js -> VACATIONS
+     *
+     * Quindi questa pagina non contiene più
+     * riferimenti specifici a Creta.
      */
-    const VACATION_TIMEZONE = 'Europe/Athens'
+    const VACANZA_TITLE =
+        vacation?.title || ''
+
+    const VACATION_TIMEZONE =
+        vacation?.timezone || 'UTC'
 
     // ==========================================================================
     // STATO DELLA PAGINA
@@ -272,30 +297,46 @@ export default function VacanzaPage() {
      * Li ordiniamo cronologicamente perché ci serviranno
      * anche per costruire il grafico.
      */
-    async function loadVacationLogs() {
-        const vacationNow =
-            new Date().toISOString()
+    // ==========================================================================
+    // CARICAMENTO LOG DELLA VACANZA ARCHIVIATA
+    // ==========================================================================
 
-        const { data } =
+    /*
+     * Una vacanza archiviata possiede una propria tabella drink_logs.
+     *
+     * Esempio Creta:
+     *
+     *     drink_logs_creta_2026
+     *
+     * Non abbiamo quindi bisogno di filtrare per data:
+     * possiamo leggere direttamente tutta la tabella.
+     */
+    async function loadVacationLogs() {
+        if (!vacation) {
+            return []
+        }
+
+        const { data, error } =
             await supabase
-                .from(TABLES.drinkLogs)
+                .from(
+                    vacation.tables.drinkLogs
+                )
                 .select('*')
-                .gte(
-                    'created_at',
-                    new Date(
-                        VACANZA_START
-                    ).toISOString()
-                )
-                .lte(
-                    'created_at',
-                    vacationNow
-                )
                 .order(
                     'created_at',
                     {
                         ascending: true
                     }
                 )
+
+        if (error) {
+            console.error(
+                'Errore caricamento drink_logs archivio:',
+                error
+            )
+
+            return []
+        }
 
         return data || []
     }
@@ -304,28 +345,37 @@ export default function VacanzaPage() {
     // CARICAMENTO PICCHI BAC
     // ==========================================================================
 
-    async function loadVacationPeaks() {
-        const vacationNow =
-            new Date().toISOString()
+    // ==========================================================================
+    // CARICAMENTO PICCHI BAC DELLA VACANZA ARCHIVIATA
+    // ==========================================================================
 
-        const { data } =
+    /*
+     * Anche i picchi BAC hanno una tabella dedicata
+     * alla singola vacanza.
+     */
+    async function loadVacationPeaks() {
+        if (!vacation) {
+            return []
+        }
+
+        const { data, error } =
             await supabase
-                .from(TABLES.dailyBacPeaks)
+                .from(
+                    vacation.tables.dailyBacPeaks
+                )
                 .select('*')
-                .gte(
-                    'peak_time',
-                    new Date(
-                        VACANZA_START
-                    ).toISOString()
-                )
-                .lte(
-                    'peak_time',
-                    vacationNow
-                )
+
+        if (error) {
+            console.error(
+                'Errore caricamento picchi BAC archivio:',
+                error
+            )
+
+            return []
+        }
 
         return data || []
     }
-
     // ==========================================================================
     // CONTATORI TOTALI
     // ==========================================================================
@@ -1046,7 +1096,7 @@ export default function VacanzaPage() {
             } =
                 await supabase
                     .from(
-                        TABLES.users
+                        vacation.tables.users
                     )
                     .select('*')
                     .order(
@@ -2243,10 +2293,10 @@ export default function VacanzaPage() {
                         }
                         onClick={() =>
                             router.push(
-                                '/home'
+                                '/vacanze'
                             )
                         }
-                        aria-label="Torna alla Home"
+                        aria-label="Torna alle vecchie vacanze"
                     >
                         ←
                     </button>
@@ -3469,7 +3519,39 @@ export default function VacanzaPage() {
                                                     log.user_id
                                                 )
                                         )
+                                    // ==========================================================================
+                                    // VACANZA NON TROVATA
+                                    // ==========================================================================
 
+                                    /*
+                                     * Protezione nel caso qualcuno scriva manualmente
+                                     * un URL inesistente, per esempio:
+                                     *
+                                     * /vacanze/paperopoli_2037
+                                     */
+                                    if (!vacation) {
+                                        return (
+                                            <main className={styles.page}>
+                                                <div className={styles.container}>
+                                                    <div className={styles.emptyState}>
+                                                        Vacanza non trovata.
+
+                                                        <br />
+                                                        <br />
+
+                                                        <button
+                                                            className={styles.secondaryButton}
+                                                            onClick={() =>
+                                                                router.push('/vacanze')
+                                                            }
+                                                        >
+                                                            ← Torna alle vecchie vacanze
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </main>
+                                        )
+                                    }
                                     return (
                                         <div
                                             key={
