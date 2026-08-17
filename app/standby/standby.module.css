@@ -1,0 +1,133 @@
+.page {
+    min-height: 100vh;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: 28px 20px;
+
+    background: #000;
+    color: #f5f5f7;
+
+    font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "SF Pro Text",
+        Arial,
+        sans-serif;
+}
+
+.container {
+    width: 100%;
+    max-width: 560px;
+}
+
+.badge {
+    display: inline-flex;
+
+    padding: 7px 11px;
+
+    border: 1px solid #2a2a2d;
+    border-radius: 100px;
+
+    background: #101012;
+
+    color: #8e8e93;
+
+    font-size: 10px;
+    font-weight: 650;
+
+    letter-spacing: 0.12em;
+}
+
+.title {
+    margin: 18px 0 0;
+
+    font-size:
+        clamp(42px,
+            10vw,
+            64px);
+
+    line-height: 0.98;
+
+    font-weight: 700;
+
+    letter-spacing: -0.05em;
+}
+
+.description {
+    max-width: 480px;
+
+    margin: 20px 0 0;
+
+    color: #8e8e93;
+
+    font-size: 16px;
+    line-height: 1.5;
+}
+
+.actions {
+    display: flex;
+    flex-direction: column;
+
+    gap: 10px;
+
+    margin-top: 34px;
+}
+
+.primaryButton,
+.secondaryButton {
+    width: 100%;
+
+    min-height: 56px;
+
+    padding: 0 18px;
+
+    border-radius: 17px;
+
+    font-family: inherit;
+    font-size: 15px;
+    font-weight: 600;
+
+    cursor: pointer;
+}
+
+.primaryButton {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    border: 1px solid #343438;
+
+    background: #f5f5f7;
+
+    color: #000;
+}
+
+.primaryButton span {
+    font-size: 20px;
+}
+
+.secondaryButton {
+    border: 1px solid #242427;
+
+    background: #0b0b0d;
+
+    color: #d1d1d6;
+}
+
+.primaryButton:active,
+.secondaryButton:active {
+    transform: scale(0.985);
+}
+
+.footer {
+    margin-top: 28px;
+
+    color: #48484a;
+
+    font-size: 12px;
+    text-align: center;
+}

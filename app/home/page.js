@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '../../lib/supabase'
-import { TABLES } from '../../lib/tableNames'
+
+import {
+  TABLES,
+  ACTIVE_DATASET_NAME
+} from '../../lib/tableNames'
+
 import styles from './home.module.css'
 
 /*
@@ -22,22 +27,53 @@ OBIETTIVI DELLA V2:
 - utilizzare un design più pulito e minimale
 - mostrare fino a 10 bevute recenti
 
-IMPORTANTE:
 
-In questa fase NON modifichiamo ancora:
+MODALITÀ LIMBO
+-------------------------------------------------------------------------------
 
-- algoritmo BAC
-- logica delle frasi
-- sistema dei picchi
-- struttura del database
+Quando ACTIVE_DATASET_NAME === 'limbo':
 
-Cambiamo principalmente la PRESENTAZIONE della Home.
+- la Home normale NON viene caricata;
+- non vengono effettuate query sui dati Limbo;
+- non vengono mostrati BAC, drink, statistiche o storico;
+- l'utente viene automaticamente mandato a:
+
+      /standby
+
+La pagina Standby permette solamente di:
+
+- consultare le vecchie vacanze;
+- accedere all'Admin.
+
+In questo modo la versione online dell'app può restare disponibile
+anche quando non è in corso nessuna vacanza reale.
 
 ===============================================================================
 */
 
 export default function Home() {
   const router = useRouter()
+
+  // ==========================================================================
+  // MODALITÀ LIMBO
+  // ==========================================================================
+
+  /*
+   * ACTIVE_DATASET_NAME viene deciso in:
+   *
+   *     lib/tableNames.js
+   *
+   * In locale normalmente avremo:
+   *
+   *     test
+   *
+   * mentre sulla versione online, quando non è in corso
+   * una vacanza, avremo:
+   *
+   *     limbo
+   */
+  const isLimbo =
+    ACTIVE_DATASET_NAME === 'limbo'
 
   // ==========================================================================
   // STATO DELLA PAGINA
@@ -57,45 +93,112 @@ export default function Home() {
   /*
    * Algoritmo BAC attuale.
    *
-   * NON lo modifichiamo ancora.
+   * K rappresenta il decadimento orario utilizzato
+   * per stimare lo smaltimento dell'alcol.
    *
-   * Verrà analizzato separatamente perché durante Creta 2026
-   * ha prodotto valori che ci sono sembrati troppo elevati.
+   * Dopo l'analisi dei dati reali di Creta 2026
+   * abbiamo deciso di utilizzare:
+   *
+   *     K = 0.15
    */
   function calculateBAC(user, drinks, now = Date.now()) {
     const K = 0.15
 
     const LOOKBACK_HOURS = 12
-    const LOOKBACK_MS = LOOKBACK_HOURS * 60 * 60 * 1000
+    const LOOKBACK_MS =
+      LOOKBACK_HOURS *
+      60 *
+      60 *
+      1000
 
-    const weightKg = user.weightKg
-    const heightCm = user.heightCm
+    const weightKg =
+      user.weightKg
 
-    const heightM = heightCm / 100
-    const bmi = weightKg / (heightM * heightM)
+    const heightCm =
+      user.heightCm
 
-    let r = 1.0181 - 0.01213 * bmi
+    const heightM =
+      heightCm / 100
 
-    r = Math.max(0.45, Math.min(0.85, r))
+    const bmi =
+      weightKg /
+      (heightM * heightM)
 
-    const validDrinks = drinks
-      .filter((drink) => {
-        const diff = now - drink.timestamp
+    /*
+     * Coefficiente di distribuzione r
+     * stimato a partire dal BMI.
+     */
+    let r =
+      1.0181 -
+      0.01213 * bmi
 
-        return diff >= 0 && diff <= LOOKBACK_MS
-      })
-      .sort((a, b) => a.timestamp - b.timestamp)
+    /*
+     * Evitiamo valori estremi.
+     */
+    r =
+      Math.max(
+        0.45,
+        Math.min(
+          0.85,
+          r
+        )
+      )
 
-    if (validDrinks.length === 0) {
+    /*
+     * Consideriamo solamente le bevute:
+     *
+     * - non future;
+     * - comprese nelle ultime 12 ore.
+     */
+    const validDrinks =
+      drinks
+        .filter(
+          (drink) => {
+            const diff =
+              now -
+              drink.timestamp
+
+            return (
+              diff >= 0 &&
+              diff <=
+              LOOKBACK_MS
+            )
+          }
+        )
+        .sort(
+          (a, b) =>
+            a.timestamp -
+            b.timestamp
+        )
+
+    /*
+     * Nessuna bevuta valida:
+     * BAC = 0.
+     */
+    if (
+      validDrinks.length ===
+      0
+    ) {
       return 0
     }
 
     let bac = 0
 
-    let lastTimestamp = validDrinks[0].timestamp
+    let lastTimestamp =
+      validDrinks[0]
+        .timestamp
 
-    for (let i = 0; i < validDrinks.length; i++) {
-      const drink = validDrinks[i]
+    /*
+     * Ricostruiamo cronologicamente
+     * l'andamento del BAC.
+     */
+    for (
+      let i = 0;
+      i < validDrinks.length;
+      i++
+    ) {
+      const drink =
+        validDrinks[i]
 
       /*
        * Prima di aggiungere la nuova bevuta
@@ -104,29 +207,51 @@ export default function Home() {
        */
       if (i > 0) {
         const hoursPassed =
-          (drink.timestamp - lastTimestamp) / 3600000
+          (
+            drink.timestamp -
+            lastTimestamp
+          ) /
+          3600000
 
-        bac = Math.max(
-          0,
-          bac - K * hoursPassed
-        )
+        bac =
+          Math.max(
+            0,
+            bac -
+            K *
+            hoursPassed
+          )
       }
 
       /*
        * Grammi di alcol puro.
+       *
+       * 0.789 = densità approssimativa
+       * dell'etanolo in g/ml.
        */
       const grams =
         drink.volumeMl *
-        (drink.abv / 100) *
+        (
+          drink.abv /
+          100
+        ) *
         0.789
 
+      /*
+       * Incremento BAC prodotto
+       * dalla bevuta.
+       */
       const deltaBAC =
         grams /
-        (r * weightKg)
+        (
+          r *
+          weightKg
+        )
 
-      bac += deltaBAC
+      bac +=
+        deltaBAC
 
-      lastTimestamp = drink.timestamp
+      lastTimestamp =
+        drink.timestamp
     }
 
     /*
@@ -134,37 +259,72 @@ export default function Home() {
      * fino al momento attuale.
      */
     const finalHoursPassed =
-      (now - lastTimestamp) / 3600000
+      (
+        now -
+        lastTimestamp
+      ) /
+      3600000
 
-    bac = Math.max(
+    bac =
+      Math.max(
+        0,
+        bac -
+        K *
+        finalHoursPassed
+      )
+
+    return Math.max(
       0,
-      bac - K * finalHoursPassed
+      bac
     )
-
-    return Math.max(0, bac)
   }
 
   // ==========================================================================
   // CONVERSIONE LOG -> FORMATO BAC
   // ==========================================================================
 
+  /*
+   * drink_logs contiene:
+   *
+   *     drink_id
+   *     created_at
+   *
+   * calculateBAC() vuole invece:
+   *
+   *     volumeMl
+   *     abv
+   *     timestamp
+   *
+   * Questa funzione effettua la conversione.
+   */
   function buildBACDrinks() {
     const result = []
 
     for (const log of logs) {
-      const drink = drinks.find(
-        (d) =>
-          String(d.id) === String(log.drink_id)
-      )
+      const drink =
+        drinks.find(
+          (d) =>
+            String(d.id) ===
+            String(
+              log.drink_id
+            )
+        )
 
       if (!drink) {
         continue
       }
 
       result.push({
-        volumeMl: drink.volume_ml,
-        abv: drink.perc_alc,
-        timestamp: new Date(log.created_at).getTime()
+        volumeMl:
+          drink.volume_ml,
+
+        abv:
+          drink.perc_alc,
+
+        timestamp:
+          new Date(
+            log.created_at
+          ).getTime()
       })
     }
 
@@ -176,37 +336,57 @@ export default function Home() {
   // ==========================================================================
 
   /*
-   * Questa funzione mantiene la vecchia logica.
+   * Questa funzione determina quale categoria
+   * di frase utilizzare.
    *
-   * Le categorie BIRRA e COCKTAIL servono
-   * esclusivamente per scegliere determinate frasi.
+   * Oltre al BAC considera anche il numero
+   * di birre/cocktail bevuti nelle ultime 3 ore.
    */
   function getState(bac) {
     const THREE_HOURS_MS =
-      3 * 60 * 60 * 1000
+      3 *
+      60 *
+      60 *
+      1000
 
-    const now = Date.now()
+    const now =
+      Date.now()
 
     let beerCount = 0
     let cocktailCount = 0
 
     for (const log of logs) {
       const logTime =
-        new Date(log.created_at).getTime()
+        new Date(
+          log.created_at
+        ).getTime()
 
-      const diff = now - logTime
+      const diff =
+        now -
+        logTime
 
+      /*
+       * Ignoriamo:
+       *
+       * - bevute future;
+       * - bevute più vecchie di 3 ore.
+       */
       if (
         diff < 0 ||
-        diff > THREE_HOURS_MS
+        diff >
+        THREE_HOURS_MS
       ) {
         continue
       }
 
-      const drink = drinks.find(
-        (d) =>
-          String(d.id) === String(log.drink_id)
-      )
+      const drink =
+        drinks.find(
+          (d) =>
+            String(d.id) ===
+            String(
+              log.drink_id
+            )
+        )
 
       if (!drink) {
         continue
@@ -217,20 +397,34 @@ export default function Home() {
           ?.trim()
           .toLowerCase()
 
-      if (category === 'beer') {
+      if (
+        category ===
+        'beer'
+      ) {
         beerCount++
       }
 
-      if (category === 'cocktail') {
+      if (
+        category ===
+        'cocktail'
+      ) {
         cocktailCount++
       }
     }
 
-    if (beerCount >= 4) {
+    /*
+     * Le categorie BIRRA e COCKTAIL
+     * hanno priorità sulla categoria BAC.
+     */
+    if (
+      beerCount >= 4
+    ) {
       return 'BIRRA'
     }
 
-    if (cocktailCount >= 4) {
+    if (
+      cocktailCount >= 4
+    ) {
       return 'COCKTAIL'
     }
 
@@ -254,43 +448,62 @@ export default function Home() {
   // ==========================================================================
 
   /*
-   * A differenza di getState(), questa funzione NON considera
+   * A differenza di getState(),
+   * questa funzione NON considera
    * il numero di birre o cocktail.
    *
-   * Serve solamente per mostrare nella card il livello BAC.
+   * Serve solamente per mostrare
+   * il livello BAC nella card.
    */
-  function getBACVisualState(bac) {
+  function getBACVisualState(
+    bac
+  ) {
     if (bac < 0.2) {
       return {
-        label: 'SOBRIO',
-        className: styles.statusSober
+        label:
+          'SOBRIO',
+
+        className:
+          styles.statusSober
       }
     }
 
     if (bac < 0.6) {
       return {
-        label: 'MEDIO',
-        className: styles.statusMedium
+        label:
+          'MEDIO',
+
+        className:
+          styles.statusMedium
       }
     }
 
     if (bac < 1.2) {
       return {
-        label: 'ALTO',
-        className: styles.statusHigh
+        label:
+          'ALTO',
+
+        className:
+          styles.statusHigh
       }
     }
 
     if (bac < 2) {
       return {
-        label: 'MOLTO ALTO',
-        className: styles.statusVeryHigh
+        label:
+          'MOLTO ALTO',
+
+        className:
+          styles.statusVeryHigh
       }
     }
 
     return {
-      label: 'LEGGENDA',
-      className: styles.statusLegend
+      label:
+        'LEGGENDA',
+
+      className:
+        styles.statusLegend
     }
   }
 
@@ -298,7 +511,13 @@ export default function Home() {
   // FRASE DIVERTENTE
   // ==========================================================================
 
-  function getPhrase(category) {
+  /*
+   * Recupera casualmente una frase attiva
+   * appartenente alla categoria selezionata.
+   */
+  function getPhrase(
+    category
+  ) {
     const normalizedCategory =
       category
         ?.trim()
@@ -313,7 +532,15 @@ export default function Home() {
           normalizedCategory
       )
 
-    if (matchingPhrases.length === 0) {
+    /*
+     * Se non esiste nessuna frase,
+     * mostriamo direttamente il nome
+     * della categoria.
+     */
+    if (
+      matchingPhrases.length ===
+      0
+    ) {
       return category
     }
 
@@ -324,7 +551,9 @@ export default function Home() {
       )
 
     return (
-      matchingPhrases[randomIndex].text ||
+      matchingPhrases[
+        randomIndex
+      ].text ||
       category
     )
   }
@@ -334,35 +563,42 @@ export default function Home() {
   // ==========================================================================
 
   /*
-   * Manteniamo temporaneamente la vecchia formula.
+   * Utilizziamo lo stesso coefficiente
+   * di decadimento del calcolo BAC:
    *
-   * NOTA:
-   * utilizza 0.11 mentre calculateBAC usa 0.13.
-   * Questa incoerenza verrà affrontata quando
-   * rifaremo l'algoritmo BAC.
+   *     K = 0.15 g/L/h
    */
-  function getSoberCountdown(bac) {
+  function getSoberCountdown(
+    bac
+  ) {
     if (bac <= 0) {
       return 'Sobrio'
     }
 
-    const hours = bac / 0.15
+    const hours =
+      bac / 0.15
 
     const totalMinutes =
-      Math.ceil(hours * 60)
+      Math.ceil(
+        hours * 60
+      )
 
     const hh =
-      Math.floor(totalMinutes / 60)
+      Math.floor(
+        totalMinutes /
+        60
+      )
 
     const mm =
-      totalMinutes % 60
+      totalMinutes %
+      60
 
     /*
-     * Formato più leggibile rispetto al vecchio HH:MM.
+     * Formato leggibile.
      *
      * Esempio:
      *
-     * 4 h 20 min
+     *     4 h 20 min
      */
     if (hh <= 0) {
       return `${mm} min`
@@ -375,156 +611,301 @@ export default function Home() {
   // CARICAMENTO LOG
   // ==========================================================================
 
-  async function loadLogs(userId) {
+  /*
+   * Carica tutte le bevute dell'utente
+   * dal dataset attualmente selezionato.
+   */
+  async function loadLogs(
+    userId
+  ) {
     const { data } =
       await supabase
-        .from(TABLES.drinkLogs)
+        .from(
+          TABLES.drinkLogs
+        )
         .select('*')
-        .eq('user_id', userId)
+        .eq(
+          'user_id',
+          userId
+        )
         .order(
           'created_at',
           {
-            ascending: false
+            ascending:
+              false
           }
         )
 
-    setLogs(data || [])
+    setLogs(
+      data || []
+    )
   }
 
   // ==========================================================================
   // CARICAMENTO UTENTE
   // ==========================================================================
 
-  async function loadUser(userId) {
+  /*
+   * Recupera peso, altezza e nickname
+   * dell'utente corrente.
+   */
+  async function loadUser(
+    userId
+  ) {
     const { data } =
       await supabase
-        .from(TABLES.users)
+        .from(
+          TABLES.users
+        )
         .select('*')
-        .eq('id', userId)
+        .eq(
+          'id',
+          userId
+        )
         .single()
 
     setUser(data)
   }
 
   // ==========================================================================
+  // REDIRECT AUTOMATICO DEL LIMBO
+  // ==========================================================================
+
+  /*
+   * Se il dataset attivo è LIMBO,
+   * /home non deve essere utilizzata.
+   *
+   * Mandiamo immediatamente l'utente alla pagina:
+   *
+   *     /standby
+   *
+   * Usiamo replace() invece di push():
+   *
+   * se l'utente preme "indietro" dal browser
+   * non vogliamo riportarlo alla Home completa.
+   */
+  useEffect(() => {
+    if (isLimbo) {
+      router.replace(
+        '/standby'
+      )
+    }
+  }, [
+    isLimbo,
+    router
+  ])
+
+  // ==========================================================================
   // CARICAMENTO INIZIALE
   // ==========================================================================
 
   useEffect(() => {
-    const userId =
-      localStorage.getItem('user_id')
+    /*
+     * Nel Limbo NON carichiamo nessun dato della Home.
+     *
+     * Il redirect verso /standby viene gestito
+     * dal useEffect precedente.
+     *
+     * Questo evita query inutili verso:
+     *
+     * users_limbo
+     * drink_logs_limbo
+     * daily_bac_peaks_limbo
+     */
+    if (isLimbo) {
+      return
+    }
 
+    /*
+     * Recuperiamo l'utente salvato
+     * nel browser.
+     */
+    const userId =
+      localStorage.getItem(
+        'user_id'
+      )
+
+    /*
+     * Se non esiste un utente selezionato,
+     * torniamo alla registrazione/login.
+     */
     if (!userId) {
       router.push('/')
       return
     }
 
     async function loadAll() {
-      /*
-       * Drink attivi.
-       */
+      // ----------------------------------------------------------------------
+      // DRINK ATTIVI
+      // ----------------------------------------------------------------------
+
       const {
         data: drinksData
       } =
         await supabase
-          .from(TABLES.drinks)
+          .from(
+            TABLES.drinks
+          )
           .select('*')
-          .eq('is_active', true)
+          .eq(
+            'is_active',
+            true
+          )
 
-      setDrinks(drinksData || [])
+      setDrinks(
+        drinksData || []
+      )
 
-      /*
-       * Frasi attive.
-       */
+      // ----------------------------------------------------------------------
+      // FRASI ATTIVE
+      // ----------------------------------------------------------------------
+
       const {
         data: phrasesData
       } =
         await supabase
-          .from(TABLES.phrases)
+          .from(
+            TABLES.phrases
+          )
           .select('*')
-          .eq('is_active', true)
+          .eq(
+            'is_active',
+            true
+          )
 
-      setPhrases(phrasesData || [])
+      setPhrases(
+        phrasesData || []
+      )
+
+      // ----------------------------------------------------------------------
+      // DATI PERSONALI
+      // ----------------------------------------------------------------------
+
+      await loadLogs(
+        userId
+      )
+
+      await loadUser(
+        userId
+      )
+
+      // ----------------------------------------------------------------------
+      // CONFIGURAZIONE PAGINA VACANZA
+      // ----------------------------------------------------------------------
 
       /*
-       * Dati personali.
-       */
-      await loadLogs(userId)
-      await loadUser(userId)
-
-      /*
-       * Configurazione pagina Vacanza.
+       * vacanza_attiva controlla la visibilità
+       * della voce "Vacanza" nel menu.
+       *
+       * Questo sistema verrà successivamente
+       * sostituito dalla gestione delle sessioni
+       * direttamente dall'Admin.
        */
       const {
         data: config
       } =
         await supabase
-          .from(TABLES.appConfig)
+          .from(
+            TABLES.appConfig
+          )
           .select('*')
-          .eq('key', 'vacanza_attiva')
+          .eq(
+            'key',
+            'vacanza_attiva'
+          )
           .single()
 
       setVacanzaAttiva(
-        config?.value || false
+        config?.value ||
+        false
       )
     }
 
     loadAll()
-  }, [router])
+  }, [
+    router,
+    isLimbo
+  ])
 
   // ==========================================================================
   // DATI DERIVATI
   // ==========================================================================
 
-  const bacDrinks = buildBACDrinks()
+  /*
+   * Trasformiamo i log nel formato
+   * richiesto dall'algoritmo BAC.
+   */
+  const bacDrinks =
+    buildBACDrinks()
 
-  const bac = user
-    ? calculateBAC(
-      {
-        weightKg: user.peso_kg,
-        heightCm: user.altezza_cm
-      },
-      bacDrinks
-    )
-    : 0
+  /*
+   * BAC corrente.
+   */
+  const bac =
+    user
+      ? calculateBAC(
+        {
+          weightKg:
+            user.peso_kg,
+
+          heightCm:
+            user.altezza_cm
+        },
+        bacDrinks
+      )
+      : 0
 
   /*
    * Stato utilizzato per scegliere la frase.
    */
-  const stato = getState(bac)
+  const stato =
+    getState(bac)
 
   const fraseCorrente =
     getPhrase(stato)
 
   /*
-   * Stato utilizzato invece dalla card BAC.
+   * Stato utilizzato invece
+   * dalla card BAC.
    */
   const bacVisualState =
-    getBACVisualState(bac)
+    getBACVisualState(
+      bac
+    )
 
+  /*
+   * Stima del ritorno a BAC zero.
+   */
   const soberText =
-    getSoberCountdown(bac)
+    getSoberCountdown(
+      bac
+    )
 
   // ==========================================================================
   // POSIZIONE DEL PALLINO SULLA SCALA BAC
   // ==========================================================================
 
   /*
-   * La nuova scala visiva va da:
+   * La scala visiva va da:
    *
-   * 0 -> 3.0
+   *     0 -> 3.0
    *
    * Qualunque valore superiore viene bloccato
    * all'estremità destra.
    */
-  const BAC_SCALE_MAX = 3
+  const BAC_SCALE_MAX =
+    3
 
   const bacMarkerPosition =
     Math.min(
       100,
       Math.max(
         0,
-        (bac / BAC_SCALE_MAX) * 100
+        (
+          bac /
+          BAC_SCALE_MAX
+        ) *
+        100
       )
     )
 
@@ -533,14 +914,19 @@ export default function Home() {
   // ==========================================================================
 
   /*
-   * Nella V1 erano solamente 5.
+   * Nella V1 mostravamo soltanto
+   * le ultime 5 bevute.
    *
    * Dopo l'utilizzo reale abbiamo deciso
    * di portarle a 10.
    */
   const displayedLogs =
     useMemo(
-      () => logs.slice(0, 10),
+      () =>
+        logs.slice(
+          0,
+          10
+        ),
       [logs]
     )
 
@@ -548,7 +934,22 @@ export default function Home() {
   // GIORNATA 08:00 -> 08:00
   // ==========================================================================
 
-  function getDayStart(now = new Date()) {
+  /*
+   * La "giornata alcolica" non termina
+   * a mezzanotte.
+   *
+   * Va:
+   *
+   *     08:00
+   *       ->
+   *     08:00 del giorno successivo
+   *
+   * Questo permette alle bevute fatte durante
+   * la notte di appartenere alla serata corretta.
+   */
+  function getDayStart(
+    now = new Date()
+  ) {
     const current =
       new Date(now)
 
@@ -562,9 +963,17 @@ export default function Home() {
       0
     )
 
-    if (current.getHours() < 8) {
+    /*
+     * Se siamo prima delle 08:00
+     * apparteniamo ancora alla giornata precedente.
+     */
+    if (
+      current.getHours() <
+      8
+    ) {
       start.setDate(
-        start.getDate() - 1
+        start.getDate() -
+        1
       )
     }
 
@@ -575,40 +984,79 @@ export default function Home() {
   // AGGIORNAMENTO PICCO BAC
   // ==========================================================================
 
+  /*
+   * Ogni volta che viene inserita una bevuta,
+   * ricalcoliamo il BAC corrente.
+   *
+   * Se è superiore al massimo già registrato
+   * per quella giornata, aggiorniamo:
+   *
+   *     daily_bac_peaks
+   */
   async function updateDailyBacPeak(
     userId,
     updatedLogs
   ) {
-    if (!user) return
+    /*
+     * Senza dati utente non possiamo
+     * calcolare correttamente il BAC.
+     */
+    if (!user) {
+      return
+    }
 
+    /*
+     * Convertiamo i log nel formato
+     * dell'algoritmo BAC.
+     */
     const bacDrinks =
       updatedLogs
-        .map((log) => {
-          const drink =
-            drinks.find(
-              (d) =>
-                String(d.id) ===
-                String(log.drink_id)
-            )
+        .map(
+          (log) => {
+            const drink =
+              drinks.find(
+                (d) =>
+                  String(
+                    d.id
+                  ) ===
+                  String(
+                    log.drink_id
+                  )
+              )
 
-          if (!drink) {
-            return null
+            if (!drink) {
+              return null
+            }
+
+            return {
+              volumeMl:
+                drink.volume_ml,
+
+              abv:
+                drink.perc_alc,
+
+              timestamp:
+                new Date(
+                  log.created_at
+                ).getTime()
+            }
           }
+        )
+        .filter(
+          Boolean
+        )
 
-          return {
-            volumeMl: drink.volume_ml,
-            abv: drink.perc_alc,
-            timestamp:
-              new Date(log.created_at).getTime()
-          }
-        })
-        .filter(Boolean)
-
+    /*
+     * BAC corrente dopo la nuova bevuta.
+     */
     const currentBac =
       calculateBAC(
         {
-          weightKg: user.peso_kg,
-          heightCm: user.altezza_cm
+          weightKg:
+            user.peso_kg,
+
+          heightCm:
+            user.altezza_cm
         },
         bacDrinks
       )
@@ -616,45 +1064,89 @@ export default function Home() {
     const now =
       new Date()
 
+    /*
+     * Giorno 08:00 -> 08:00.
+     */
     const dayStart =
-      getDayStart(now).toISOString()
+      getDayStart(
+        now
+      ).toISOString()
 
+    /*
+     * Cerchiamo il picco eventualmente
+     * già presente.
+     */
     const {
       data: existingPeak
     } =
       await supabase
-        .from(TABLES.dailyBacPeaks)
+        .from(
+          TABLES.dailyBacPeaks
+        )
         .select('*')
-        .eq('user_id', userId)
-        .eq('day_start', dayStart)
+        .eq(
+          'user_id',
+          userId
+        )
+        .eq(
+          'day_start',
+          dayStart
+        )
         .maybeSingle()
 
+    /*
+     * Nessun record:
+     * creiamo il primo picco della giornata.
+     */
     if (!existingPeak) {
       await supabase
-        .from(TABLES.dailyBacPeaks)
+        .from(
+          TABLES.dailyBacPeaks
+        )
         .insert({
-          user_id: userId,
-          day_start: dayStart,
-          peak_bac: currentBac,
-          peak_time: now.toISOString()
+          user_id:
+            userId,
+
+          day_start:
+            dayStart,
+
+          peak_bac:
+            currentBac,
+
+          peak_time:
+            now.toISOString()
         })
 
       return
     }
 
+    /*
+     * Record già esistente:
+     * aggiorniamo solamente se il nuovo BAC
+     * supera il massimo precedente.
+     */
     if (
       currentBac >
       Number(
-        existingPeak.peak_bac || 0
+        existingPeak.peak_bac ||
+        0
       )
     ) {
       await supabase
-        .from(TABLES.dailyBacPeaks)
+        .from(
+          TABLES.dailyBacPeaks
+        )
         .update({
-          peak_bac: currentBac,
-          peak_time: now.toISOString()
+          peak_bac:
+            currentBac,
+
+          peak_time:
+            now.toISOString()
         })
-        .eq('id', existingPeak.id)
+        .eq(
+          'id',
+          existingPeak.id
+        )
     }
   }
 
@@ -662,48 +1154,86 @@ export default function Home() {
   // INSERIMENTO BEVUTA
   // ==========================================================================
 
-  async function handleDrinkClick(drinkId) {
+  /*
+   * Viene chiamata quando l'utente
+   * preme uno dei pulsanti drink.
+   */
+  async function handleDrinkClick(
+    drinkId
+  ) {
     const userId =
-      localStorage.getItem('user_id')
+      localStorage.getItem(
+        'user_id'
+      )
 
-    if (!userId) return
+    if (!userId) {
+      return
+    }
 
+    /*
+     * Salviamo la nuova bevuta
+     * nel dataset corrente.
+     */
     await supabase
-      .from(TABLES.drinkLogs)
+      .from(
+        TABLES.drinkLogs
+      )
       .insert({
-        user_id: userId,
-        drink_id: drinkId
+        user_id:
+          userId,
+
+        drink_id:
+          drinkId
       })
 
     /*
      * Feedback aptico sui dispositivi compatibili.
      */
-    if (navigator.vibrate) {
-      navigator.vibrate(35)
+    if (
+      navigator.vibrate
+    ) {
+      navigator.vibrate(
+        35
+      )
     }
 
     /*
-     * Ricarichiamo immediatamente i log.
+     * Ricarichiamo immediatamente
+     * tutte le bevute dell'utente.
      */
     const {
       data: updatedLogs
     } =
       await supabase
-        .from(TABLES.drinkLogs)
+        .from(
+          TABLES.drinkLogs
+        )
         .select('*')
-        .eq('user_id', userId)
+        .eq(
+          'user_id',
+          userId
+        )
         .order(
           'created_at',
           {
-            ascending: false
+            ascending:
+              false
           }
         )
 
-    setLogs(updatedLogs || [])
+    setLogs(
+      updatedLogs ||
+      []
+    )
 
+    /*
+     * Verifichiamo se abbiamo
+     * stabilito un nuovo picco BAC.
+     */
     await updateDailyBacPeak(
       userId,
-      updatedLogs || []
+      updatedLogs ||
+      []
     )
   }
 
@@ -711,35 +1241,62 @@ export default function Home() {
   // ANNULLA ULTIMA BEVUTA
   // ==========================================================================
 
+  /*
+   * Cancella l'ultima bevuta
+   * registrata dall'utente.
+   */
   async function handleUndo() {
-    if (logs.length === 0) {
+    if (
+      logs.length ===
+      0
+    ) {
       return
     }
 
     await supabase
-      .from(TABLES.drinkLogs)
+      .from(
+        TABLES.drinkLogs
+      )
       .delete()
-      .eq('id', logs[0].id)
+      .eq(
+        'id',
+        logs[0].id
+      )
 
     const userId =
-      localStorage.getItem('user_id')
+      localStorage.getItem(
+        'user_id'
+      )
 
-    await loadLogs(userId)
+    /*
+     * Ricarichiamo lo storico.
+     */
+    await loadLogs(
+      userId
+    )
   }
 
   // ==========================================================================
   // CAMBIO UTENTE
   // ==========================================================================
 
+  /*
+   * Rimuove l'utente attualmente salvato
+   * dal browser e torna alla pagina iniziale.
+   */
   function handleSwitchUser() {
     const confirmed =
       window.confirm(
         'Non cambiare utente se non necessario.\n\nSei sicuro di voler continuare? Potresti creare confusione nei test o nei dati salvati.'
       )
 
-    if (!confirmed) return
+    if (!confirmed) {
+      return
+    }
 
-    localStorage.removeItem('user_id')
+    localStorage.removeItem(
+      'user_id'
+    )
 
     setMenuOpen(false)
 
@@ -747,22 +1304,52 @@ export default function Home() {
   }
 
   // ==========================================================================
+  // LIMBO: NON MOSTRARE LA HOME NORMALE
+  // ==========================================================================
+
+  /*
+   * Il redirect del useEffect avviene
+   * dopo il primo render React.
+   *
+   * Senza questo controllo potrebbe comparire
+   * per un istante la Home normale prima
+   * dell'apertura di /standby.
+   *
+   * Restituendo null non mostriamo nulla
+   * durante quel brevissimo intervallo.
+   */
+  if (isLimbo) {
+    return null
+  }
+
+  // ==========================================================================
   // INTERFACCIA
   // ==========================================================================
 
   return (
-    <main className={styles.page}>
+    <main
+      className={
+        styles.page
+      }
+    >
 
       {/* ================================================================
           HEADER
           ================================================================ */}
 
-      <header className={styles.header}>
+      <header
+        className={
+          styles.header
+        }
+      >
         <button
-          className={styles.menuButton}
+          className={
+            styles.menuButton
+          }
           onClick={() =>
             setMenuOpen(
-              (prev) => !prev
+              (prev) =>
+                !prev
             )
           }
           aria-label="Apri menu"
@@ -771,56 +1358,104 @@ export default function Home() {
         </button>
 
         {menuOpen && (
-          <div className={styles.menuDropdown}>
-            <div className={styles.menuNickname}>
+          <div
+            className={
+              styles.menuDropdown
+            }
+          >
+
+            {/* ------------------------------------------------------------
+                UTENTE ATTUALE
+                ------------------------------------------------------------ */}
+
+            <div
+              className={
+                styles.menuNickname
+              }
+            >
               {user
                 ? user.nickname
                 : 'Utente'}
             </div>
 
-            <div className={styles.menuWarning}>
+            <div
+              className={
+                styles.menuWarning
+              }
+            >
               Non cambiare utente se non necessario
             </div>
 
+            {/* ------------------------------------------------------------
+                CAMBIO UTENTE
+                ------------------------------------------------------------ */}
+
             <button
-              onClick={handleSwitchUser}
+              onClick={
+                handleSwitchUser
+              }
             >
               Cambia utente
             </button>
 
+            {/* ------------------------------------------------------------
+                GRUPPO
+                ------------------------------------------------------------ */}
+
             <button
               onClick={() =>
-                router.push('/group')
+                router.push(
+                  '/group'
+                )
               }
             >
               Gruppo
             </button>
 
+            {/* ------------------------------------------------------------
+                ARCHIVIO VACANZE
+                ------------------------------------------------------------ */}
+
             <button
               onClick={() =>
-                router.push('/vacanze')
+                router.push(
+                  '/vacanze'
+                )
               }
             >
               Vecchie vacanze
             </button>
 
+            {/* ------------------------------------------------------------
+                VACANZA CORRENTE
+                ------------------------------------------------------------ */}
+
             {vacanzaAttiva && (
               <button
                 onClick={() =>
-                  router.push('/vacanza')
+                  router.push(
+                    '/vacanza'
+                  )
                 }
               >
                 Vacanza
               </button>
             )}
 
+            {/* ------------------------------------------------------------
+                ADMIN
+                ------------------------------------------------------------ */}
+
             <button
               onClick={() =>
-                router.push('/admin')
+                router.push(
+                  '/admin'
+                )
               }
             >
               Admin
             </button>
+
           </div>
         )}
       </header>
@@ -829,72 +1464,161 @@ export default function Home() {
           FRASE DIVERTENTE
           ================================================================ */}
 
-      <section className={styles.phraseSection}>
-        <h1 className={styles.phrase}>
+      <section
+        className={
+          styles.phraseSection
+        }
+      >
+        <h1
+          className={
+            styles.phrase
+          }
+        >
           {fraseCorrente}
         </h1>
 
-        <div className={styles.phraseAccent} />
+        <div
+          className={
+            styles.phraseAccent
+          }
+        />
       </section>
 
       {/* ================================================================
           CARD BAC
           ================================================================ */}
 
-      <section className={styles.bacCard}>
-        <div className={styles.bacHeader}>
+      <section
+        className={
+          styles.bacCard
+        }
+      >
+        <div
+          className={
+            styles.bacHeader
+          }
+        >
+
+          {/* ------------------------------------------------------------
+              BAC CORRENTE
+              ------------------------------------------------------------ */}
+
           <div>
-            <div className={styles.bacLabel}>
+            <div
+              className={
+                styles.bacLabel
+              }
+            >
               BAC ATTUALE
             </div>
 
-            <div className={styles.bacValue}>
-              {bac.toFixed(2)}
+            <div
+              className={
+                styles.bacValue
+              }
+            >
+              {bac.toFixed(
+                2
+              )}
             </div>
 
             <div
               className={`${styles.bacStatus} ${bacVisualState.className}`}
             >
-              <span className={styles.statusDot} />
+              <span
+                className={
+                  styles.statusDot
+                }
+              />
 
-              {bacVisualState.label}
+              {
+                bacVisualState.label
+              }
             </div>
           </div>
 
-          <div className={styles.soberBox}>
-            <span className={styles.soberIcon}>
+          {/* ------------------------------------------------------------
+              STIMA RITORNO A ZERO
+              ------------------------------------------------------------ */}
+
+          <div
+            className={
+              styles.soberBox
+            }
+          >
+            <span
+              className={
+                styles.soberIcon
+              }
+            >
               ◷
             </span>
 
             <div>
-              <div className={styles.soberLabel}>
+              <div
+                className={
+                  styles.soberLabel
+                }
+              >
                 Ritorno a zero tra
               </div>
 
-              <div className={styles.soberValue}>
+              <div
+                className={
+                  styles.soberValue
+                }
+              >
                 {soberText}
               </div>
             </div>
           </div>
+
         </div>
 
         {/* --------------------------------------------------------------
             SCALA BAC
             -------------------------------------------------------------- */}
 
-        <div className={styles.scaleWrapper}>
-          <div className={styles.scale}>
-            <div className={styles.scaleGradient} />
+        <div
+          className={
+            styles.scaleWrapper
+          }
+        >
+          <div
+            className={
+              styles.scale
+            }
+          >
+            <div
+              className={
+                styles.scaleGradient
+              }
+            />
+
+            {/* ----------------------------------------------------------
+                INDICATORE BAC
+                ---------------------------------------------------------- */}
 
             <div
-              className={styles.scaleMarker}
+              className={
+                styles.scaleMarker
+              }
               style={{
-                left: `${bacMarkerPosition}%`
+                left:
+                  `${bacMarkerPosition}%`
               }}
             />
           </div>
 
-          <div className={styles.scaleLabels}>
+          {/* ------------------------------------------------------------
+              VALORI DI RIFERIMENTO
+              ------------------------------------------------------------ */}
+
+          <div
+            className={
+              styles.scaleLabels
+            }
+          >
             <span>0</span>
             <span>0,5</span>
             <span>1,0</span>
@@ -910,33 +1634,89 @@ export default function Home() {
           INSERIMENTO BEVUTE
           ================================================================ */}
 
-      <section className={styles.drinksSection}>
-        <h2 className={styles.sectionTitle}>
+      <section
+        className={
+          styles.drinksSection
+        }
+      >
+        <h2
+          className={
+            styles.sectionTitle
+          }
+        >
           Aggiungi una bevuta
         </h2>
 
-        <div className={styles.grid}>
-          {drinks.map((drink) => (
-            <button
-              key={drink.id}
-              className={styles.drinkButton}
-              onClick={() =>
-                handleDrinkClick(drink.id)
-              }
-            >
-              <span className={styles.drinkEmoji}>
-                {drink.emoji}
-              </span>
+        {/* --------------------------------------------------------------
+            PULSANTI DRINK
+            -------------------------------------------------------------- */}
 
-              <span className={styles.drinkName}>
-                {drink.name}
-              </span>
+        <div
+          className={
+            styles.grid
+          }
+        >
+          {drinks.map(
+            (drink) => (
+              <button
+                key={
+                  drink.id
+                }
+                className={
+                  styles.drinkButton
+                }
+                onClick={() =>
+                  handleDrinkClick(
+                    drink.id
+                  )
+                }
+              >
 
-              <span className={styles.drinkDetails}>
-                {drink.perc_alc}%
-              </span>
-            </button>
-          ))}
+                {/* --------------------------------------------------------
+                    EMOJI
+                    -------------------------------------------------------- */}
+
+                <span
+                  className={
+                    styles.drinkEmoji
+                  }
+                >
+                  {
+                    drink.emoji
+                  }
+                </span>
+
+                {/* --------------------------------------------------------
+                    NOME
+                    -------------------------------------------------------- */}
+
+                <span
+                  className={
+                    styles.drinkName
+                  }
+                >
+                  {
+                    drink.name
+                  }
+                </span>
+
+                {/* --------------------------------------------------------
+                    GRADAZIONE
+                    -------------------------------------------------------- */}
+
+                <span
+                  className={
+                    styles.drinkDetails
+                  }
+                >
+                  {
+                    drink.perc_alc
+                  }%
+                </span>
+
+              </button>
+            )
+          )}
         </div>
 
         {/* --------------------------------------------------------------
@@ -944,10 +1724,15 @@ export default function Home() {
             -------------------------------------------------------------- */}
 
         <button
-          className={styles.undoButton}
-          onClick={handleUndo}
+          className={
+            styles.undoButton
+          }
+          onClick={
+            handleUndo
+          }
         >
           ↶
+
           <span>
             Annulla ultima bevuta
           </span>
@@ -958,57 +1743,129 @@ export default function Home() {
           ULTIME 10 BEVUTE
           ================================================================ */}
 
-      <section className={styles.logsSection}>
-        <h2 className={styles.sectionTitle}>
+      <section
+        className={
+          styles.logsSection
+        }
+      >
+        <h2
+          className={
+            styles.sectionTitle
+          }
+        >
           Ultime bevute
         </h2>
 
-        <div className={styles.logsList}>
-          {displayedLogs.map((log) => {
-            const drink =
-              drinks.find(
-                (d) =>
-                  String(d.id) ===
-                  String(log.drink_id)
-              )
+        <div
+          className={
+            styles.logsList
+          }
+        >
 
-            return (
-              <div
-                key={log.id}
-                className={styles.logRow}
-              >
-                <div className={styles.logDrink}>
-                  <span className={styles.logEmoji}>
-                    {drink?.emoji}
-                  </span>
+          {/* --------------------------------------------------------------
+              LOG PRESENTI
+              -------------------------------------------------------------- */}
 
-                  <span>
-                    {drink?.name}
-                  </span>
-                </div>
+          {displayedLogs.map(
+            (log) => {
+              /*
+               * drink_logs contiene solamente drink_id.
+               *
+               * Recuperiamo nome ed emoji dalla tabella drinks.
+               */
+              const drink =
+                drinks.find(
+                  (d) =>
+                    String(
+                      d.id
+                    ) ===
+                    String(
+                      log.drink_id
+                    )
+                )
 
-                <span className={styles.logTime}>
-                  {new Date(
-                    log.created_at
-                  ).toLocaleTimeString(
-                    [],
-                    {
-                      hour: '2-digit',
-                      minute: '2-digit'
+              return (
+                <div
+                  key={
+                    log.id
+                  }
+                  className={
+                    styles.logRow
+                  }
+                >
+
+                  {/* ------------------------------------------------------
+                      DRINK
+                      ------------------------------------------------------ */}
+
+                  <div
+                    className={
+                      styles.logDrink
                     }
-                  )}
-                </span>
-              </div>
-            )
-          })}
+                  >
+                    <span
+                      className={
+                        styles.logEmoji
+                      }
+                    >
+                      {
+                        drink?.emoji
+                      }
+                    </span>
 
-          {displayedLogs.length === 0 && (
-            <div className={styles.emptyLogs}>
-              Nessuna bevuta registrata
-            </div>
+                    <span>
+                      {
+                        drink?.name
+                      }
+                    </span>
+                  </div>
+
+                  {/* ------------------------------------------------------
+                      ORARIO
+                      ------------------------------------------------------ */}
+
+                  <span
+                    className={
+                      styles.logTime
+                    }
+                  >
+                    {new Date(
+                      log.created_at
+                    ).toLocaleTimeString(
+                      [],
+                      {
+                        hour:
+                          '2-digit',
+
+                        minute:
+                          '2-digit'
+                      }
+                    )}
+                  </span>
+
+                </div>
+              )
+            }
           )}
+
+          {/* --------------------------------------------------------------
+              NESSUNA BEVUTA
+              -------------------------------------------------------------- */}
+
+          {displayedLogs.length ===
+            0 && (
+              <div
+                className={
+                  styles.emptyLogs
+                }
+              >
+                Nessuna bevuta registrata
+              </div>
+            )}
+
         </div>
       </section>
+
     </main>
   )
 }
