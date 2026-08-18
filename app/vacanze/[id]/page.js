@@ -20,8 +20,7 @@ import {
 } from 'recharts'
 
 import {
-    TABLES,
-    VACATIONS
+    TABLES
 } from '../../../lib/tableNames'
 
 import { supabase } from '../../../lib/supabase'
@@ -109,15 +108,94 @@ export default function VacanzaPage() {
  */
     const params = useParams()
 
+
     const vacationId =
-        params.id
+        Array.isArray(params?.id)
+            ? params.id[0]
+            : params?.id
 
     /*
      * Cerchiamo la configurazione corrispondente
      * dentro VACATIONS.
      */
-    const vacation =
-        VACATIONS[vacationId]
+    const [vacation, setVacation] = useState(null)
+    const [vacationResolved, setVacationResolved] = useState(false)
+
+
+    useEffect(() => {
+        let cancelled = false
+
+        async function loadVacationConfig() {
+            if (!vacationId) {
+                return
+            }
+
+            const {
+                data,
+                error
+            } =
+                await supabase
+                    .from('vacations')
+                    .select(`
+                    slug,
+                    title,
+                    timezone,
+                    start_at,
+                    end_at,
+                    users_table,
+                    drink_logs_table,
+                    daily_bac_peaks_table,
+                    status
+                `)
+                    .eq(
+                        'slug',
+                        vacationId
+                    )
+                    .maybeSingle()
+
+            if (cancelled) {
+                return
+            }
+
+            if (
+                error ||
+                !data
+            ) {
+                console.error(
+                    'Vacanza non trovata:',
+                    error
+                )
+
+                setVacation(null)
+                setVacationResolved(true)
+
+                return
+            }
+
+            setVacation({
+                ...data,
+
+                tables: {
+                    users:
+                        data.users_table,
+
+                    drinkLogs:
+                        data.drink_logs_table,
+
+                    dailyBacPeaks:
+                        data.daily_bac_peaks_table
+                }
+            })
+
+            setVacationResolved(true)
+        }
+
+        loadVacationConfig()
+
+        return () => {
+            cancelled = true
+        }
+    }, [vacationId])
 
     // ==========================================================================
     // CONFIGURAZIONE VACANZA
@@ -1063,6 +1141,13 @@ export default function VacanzaPage() {
     // ==========================================================================
 
     useEffect(() => {
+        if (
+            !vacationResolved ||
+            !vacation
+        ) {
+            return
+        }
+
         async function load() {
             // -----------------------------------------------------------------------
             // LOG + PICCHI
@@ -1212,9 +1297,12 @@ export default function VacanzaPage() {
                 )
             )
         }
-
         load()
-    }, [])
+
+    }, [
+        vacationResolved,
+        vacation
+    ])
 
     // ==========================================================================
     // CLASSIFICA ATTIVA

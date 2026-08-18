@@ -1,62 +1,83 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { VACATIONS } from '../../lib/tableNames'
+import { supabase } from '../../lib/supabase'
 import styles from './vacanze.module.css'
-
-/*
-===============================================================================
-PAGINA ARCHIVIO VACANZE
-===============================================================================
-
-Questa pagina mostra tutte le vacanze storiche disponibili.
-
-Le vacanze non vengono cercate direttamente nel database.
-
-La lista viene letta da:
-
-    VACATIONS
-
-definito in:
-
-    lib/tableNames.js
-
-Questo significa che per aggiungere una nuova vacanza futura
-basterà aggiungere una nuova configurazione in VACATIONS.
-
-Esempio:
-
-    creta_2026
-    ibiza_2027
-    ...
-
-Ogni card apre poi:
-
-    /vacanze/[vacationId]
-
-Esempio:
-
-    /vacanze/creta_2026
-
-===============================================================================
-*/
 
 export default function VacanzePage() {
     const router = useRouter()
 
-    /*
-     * VACATIONS è un oggetto.
-     *
-     * Lo convertiamo in array per poter usare .map().
-     */
-    const vacations =
-        Object.values(VACATIONS)
+    // ==========================================================================
+    // VACANZE ARCHIVIATE
+    // ==========================================================================
+
+    const [vacations, setVacations] = useState([])
+    const [loading, setLoading] = useState(true)
+
+    // ==========================================================================
+    // CARICAMENTO ARCHIVIO
+    // ==========================================================================
+
+    useEffect(() => {
+        async function loadVacations() {
+            const {
+                data,
+                error
+            } =
+                await supabase
+                    .from('vacations')
+                    .select(`
+                        id,
+                        slug,
+                        title,
+                        start_at,
+                        end_at,
+                        timezone,
+                        status
+                    `)
+                    .eq(
+                        'status',
+                        'archived'
+                    )
+                    .order(
+                        'start_at',
+                        {
+                            ascending: false,
+                            nullsFirst: false
+                        }
+                    )
+
+            if (error) {
+                console.error(
+                    'Errore caricamento vacanze archiviate:',
+                    error
+                )
+
+                setVacations([])
+                setLoading(false)
+
+                return
+            }
+
+            setVacations(
+                data || []
+            )
+
+            setLoading(false)
+        }
+
+        loadVacations()
+    }, [])
 
     // ==========================================================================
     // FORMATTAZIONE DATE
     // ==========================================================================
 
-    function formatDate(dateString) {
+    function formatDate(
+        dateString,
+        timezone = 'Europe/Rome'
+    ) {
         if (!dateString) {
             return '—'
         }
@@ -68,7 +89,10 @@ export default function VacanzePage() {
             {
                 day: 'numeric',
                 month: 'long',
-                year: 'numeric'
+                year: 'numeric',
+                timeZone:
+                    timezone ||
+                    'Europe/Rome'
             }
         )
     }
@@ -78,32 +102,60 @@ export default function VacanzePage() {
     // ==========================================================================
 
     return (
-        <main className={styles.page}>
-            <div className={styles.container}>
+        <main
+            className={
+                styles.page
+            }
+        >
+            <div
+                className={
+                    styles.container
+                }
+            >
 
                 {/* ================================================================
-            HEADER
-            ================================================================ */}
+                    HEADER
+                    ================================================================ */}
 
-                <header className={styles.header}>
+                <header
+                    className={
+                        styles.header
+                    }
+                >
                     <div>
-                        <div className={styles.eyebrow}>
+                        <div
+                            className={
+                                styles.eyebrow
+                            }
+                        >
                             ARCHIVIO
                         </div>
 
-                        <h1 className={styles.title}>
+                        <h1
+                            className={
+                                styles.title
+                            }
+                        >
                             Vecchie vacanze
                         </h1>
 
-                        <p className={styles.subtitle}>
+                        <p
+                            className={
+                                styles.subtitle
+                            }
+                        >
                             Rivedi classifiche, premi, grafici e bevute delle vacanze passate.
                         </p>
                     </div>
 
                     <button
-                        className={styles.homeButton}
+                        className={
+                            styles.homeButton
+                        }
                         onClick={() =>
-                            router.push('/home')
+                            router.push(
+                                '/home'
+                            )
                         }
                         aria-label="Torna alla Home"
                     >
@@ -112,79 +164,142 @@ export default function VacanzePage() {
                 </header>
 
                 {/* ================================================================
-            ELENCO VACANZE
-            ================================================================ */}
+                    CARICAMENTO
+                    ================================================================ */}
 
-                <section className={styles.vacationsGrid}>
-                    {vacations.map(
-                        (vacation) => (
-                            <article
-                                key={vacation.id}
-                                className={styles.vacationCard}
-                            >
-                                <div className={styles.cardTop}>
-                                    <div>
-                                        <div className={styles.cardStatus}>
-                                            ARCHIVIATA
-                                        </div>
-
-                                        <h2 className={styles.cardTitle}>
-                                            {vacation.title}
-                                        </h2>
-                                    </div>
-
-                                    <div className={styles.archiveIcon}>
-                                        🗂️
-                                    </div>
-                                </div>
-
-                                <div className={styles.cardDates}>
-                                    <div>
-                                        <span>Dal</span>
-
-                                        <strong>
-                                            {formatDate(
-                                                vacation.start
-                                            )}
-                                        </strong>
-                                    </div>
-
-                                    <div>
-                                        <span>Al</span>
-
-                                        <strong>
-                                            {formatDate(
-                                                vacation.end
-                                            )}
-                                        </strong>
-                                    </div>
-                                </div>
-
-                                <button
-                                    className={styles.openButton}
-                                    onClick={() =>
-                                        router.push(
-                                            `/vacanze/${vacation.id}`
-                                        )
-                                    }
-                                >
-                                    Apri recap
-                                    <span>→</span>
-                                </button>
-                            </article>
-                        )
-                    )}
-                </section>
-
-                {/* ================================================================
-            NESSUNA VACANZA
-            ================================================================ */}
-
-                {vacations.length === 0 && (
-                    <div className={styles.emptyState}>
-                        Nessuna vacanza archiviata.
+                {loading && (
+                    <div
+                        className={
+                            styles.emptyState
+                        }
+                    >
+                        Caricamento archivio...
                     </div>
                 )}
+
+                {/* ================================================================
+                    ELENCO VACANZE
+                    ================================================================ */}
+
+                {!loading && (
+                    <section
+                        className={
+                            styles.vacationsGrid
+                        }
+                    >
+                        {vacations.map(
+                            (vacation) => (
+                                <article
+                                    key={
+                                        vacation.id
+                                    }
+                                    className={
+                                        styles.vacationCard
+                                    }
+                                >
+                                    <div
+                                        className={
+                                            styles.cardTop
+                                        }
+                                    >
+                                        <div>
+                                            <div
+                                                className={
+                                                    styles.cardStatus
+                                                }
+                                            >
+                                                ARCHIVIATA
+                                            </div>
+
+                                            <h2
+                                                className={
+                                                    styles.cardTitle
+                                                }
+                                            >
+                                                {
+                                                    vacation.title
+                                                }
+                                            </h2>
+                                        </div>
+
+                                        <div
+                                            className={
+                                                styles.archiveIcon
+                                            }
+                                        >
+                                            🗂️
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        className={
+                                            styles.cardDates
+                                        }
+                                    >
+                                        <div>
+                                            <span>
+                                                Dal
+                                            </span>
+
+                                            <strong>
+                                                {formatDate(
+                                                    vacation.start_at,
+                                                    vacation.timezone
+                                                )}
+                                            </strong>
+                                        </div>
+
+                                        <div>
+                                            <span>
+                                                Al
+                                            </span>
+
+                                            <strong>
+                                                {formatDate(
+                                                    vacation.end_at,
+                                                    vacation.timezone
+                                                )}
+                                            </strong>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        className={
+                                            styles.openButton
+                                        }
+                                        onClick={() =>
+                                            router.push(
+                                                `/vacanze/${vacation.slug}`
+                                            )
+                                        }
+                                    >
+                                        Apri recap
+
+                                        <span>
+                                            →
+                                        </span>
+                                    </button>
+                                </article>
+                            )
+                        )}
+                    </section>
+                )}
+
+                {/* ================================================================
+                    NESSUNA VACANZA
+                    ================================================================ */}
+
+                {!loading &&
+                    vacations.length === 0 && (
+                        <div
+                            className={
+                                styles.emptyState
+                            }
+                        >
+                            Nessuna vacanza archiviata.
+                        </div>
+                    )}
+
             </div>
         </main>
     )

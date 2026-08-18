@@ -6,64 +6,6 @@ import { supabase } from '../../lib/supabase'
 import { TABLES } from '../../lib/tableNames'
 import styles from '../styles/form.module.css'
 
-/*
-===============================================================================
-PAGINA ADMIN
-===============================================================================
-
-Questa pagina permette di gestire alcune configurazioni globali dell'app.
-
-Attualmente consente di:
-
-1. Accedere al pannello tramite password.
-
-2. Gestire le bevande:
-   - creare nuovi drink
-   - modificare drink esistenti
-   - attivare/disattivare drink
-
-3. Gestire le frasi:
-   - creare nuove frasi
-   - modificare frasi esistenti
-   - attivare/disattivare frasi
-
-4. Attivare/disattivare la pagina Vacanza tramite app_config.
-
-IMPORTANTE - SISTEMA DATASET:
-
-Questa pagina NON utilizza:
-
-    users
-    drink_logs
-    daily_bac_peaks
-
-Quindi il passaggio tra:
-
-    current
-    test
-    creta_2026
-
-non cambia direttamente il comportamento dell'Admin.
-
-Le tabelle utilizzate qui sono infatti condivise:
-
-    TABLES.drinks
-    TABLES.phrases
-    TABLES.appConfig
-
-Anche se sono condivise, utilizziamo comunque TABLES.xxx
-per evitare di avere nomi di tabelle scritti direttamente
-in giro per il progetto.
-
-NOTA FUTURA:
-
-Se in futuro vorremo rendere anche drink e frasi specifici
-per ogni vacanza, sarà sufficiente modificare tableNames.js
-e adattare la relativa struttura database.
-
-===============================================================================
-*/
-
 export default function Admin() {
     const router = useRouter()
 
@@ -71,64 +13,45 @@ export default function Admin() {
     // ACCESSO ADMIN
     // =========================================================================
 
-    /*
-     * Password digitata dall'utente.
-     */
     const [inputPassword, setInputPassword] = useState('')
-
-    /*
-     * Indica se l'utente ha superato il controllo password.
-     *
-     * false -> mostra schermata login
-     * true  -> mostra pannello Admin
-     */
     const [isLogged, setIsLogged] = useState(false)
-
-    /*
-     * Messaggio di errore in caso di password errata.
-     */
     const [error, setError] = useState('')
 
-    /*
-     * Tab attualmente visualizzata nel pannello.
-     *
-     * drinks  -> gestione bevande
-     * phrases -> gestione frasi
-     */
+    // =========================================================================
+    // TAB
+    // =========================================================================
+
     const [tab, setTab] = useState('drinks')
 
     // =========================================================================
-    // DATI CARICATI DA SUPABASE
+    // DATI
     // =========================================================================
 
-    /*
-     * Lista completa delle bevande.
-     *
-     * Comprende sia quelle attive sia quelle disattivate,
-     * perché nell'Admin dobbiamo poterle gestire entrambe.
-     */
     const [drinks, setDrinks] = useState([])
-
-    /*
-     * Lista completa delle frasi.
-     */
     const [phrases, setPhrases] = useState([])
-
-    /*
-     * Stato della configurazione "vacanza_attiva".
-     *
-     * true  -> la voce Vacanza compare nella Home
-     * false -> la pagina Vacanza non viene mostrata nel menu
-     */
     const [vacanzaAttiva, setVacanzaAttiva] = useState(false)
+
+    // =========================================================================
+    // SESSIONI
+    // =========================================================================
+
+    const [vacations, setVacations] = useState([])
+
+    const [newVacation, setNewVacation] = useState({
+        title: '',
+        slug: '',
+        timezone: 'Europe/Rome',
+        startAt: '',
+        endAt: ''
+    })
+
+    const [sessionMessage, setSessionMessage] = useState('')
+    const [creatingSession, setCreatingSession] = useState(false)
 
     // =========================================================================
     // FORM NUOVO DRINK
     // =========================================================================
 
-    /*
-     * Stato temporaneo utilizzato per creare una nuova bevanda.
-     */
     const [newDrink, setNewDrink] = useState({
         name: '',
         emoji: '',
@@ -142,9 +65,6 @@ export default function Admin() {
     // FORM NUOVA FRASE
     // =========================================================================
 
-    /*
-     * Stato temporaneo utilizzato per creare una nuova frase.
-     */
     const [newPhrase, setNewPhrase] = useState({
         category: 'SOBRIO',
         text: '',
@@ -155,28 +75,8 @@ export default function Admin() {
     // PASSWORD ADMIN
     // =========================================================================
 
-    /*
-     * Password del pannello Admin.
-     *
-     * ATTENZIONE:
-     * essendo scritta nel codice client NON rappresenta
-     * una protezione di sicurezza forte.
-     *
-     * Per l'utilizzo attuale dell'app serve semplicemente
-     * a evitare che gli utenti entrino accidentalmente nell'Admin.
-     *
-     * Se in futuro l'app diventasse pubblica o più sensibile,
-     * questa autenticazione andrebbe completamente ripensata.
-     */
     const ADMIN_PASSWORD = '1234'
 
-    // =========================================================================
-    // LOGIN ADMIN
-    // =========================================================================
-
-    /*
-     * Confronta la password inserita con ADMIN_PASSWORD.
-     */
     function handleLogin() {
         if (inputPassword === ADMIN_PASSWORD) {
             setIsLogged(true)
@@ -190,15 +90,6 @@ export default function Admin() {
     // CARICAMENTO DRINK
     // =========================================================================
 
-    /*
-     * Recupera tutte le bevande dal database.
-     *
-     * TABLES.drinks attualmente corrisponde a:
-     *
-     *     drinks
-     *
-     * ed è una tabella condivisa tra tutti i dataset.
-     */
     async function loadDrinks() {
         const { data } = await supabase
             .from(TABLES.drinks)
@@ -212,13 +103,6 @@ export default function Admin() {
     // CARICAMENTO FRASI
     // =========================================================================
 
-    /*
-     * Recupera tutte le frasi dal database.
-     *
-     * TABLES.phrases attualmente corrisponde a:
-     *
-     *     phrases
-     */
     async function loadPhrases() {
         const { data } = await supabase
             .from(TABLES.phrases)
@@ -229,48 +113,59 @@ export default function Admin() {
     }
 
     // =========================================================================
-    // CARICAMENTO INIZIALE ADMIN
+    // CARICAMENTO SESSIONI
     // =========================================================================
 
-    /*
-     * I dati vengono caricati solamente DOPO
-     * che la password Admin è stata accettata.
-     */
+    async function loadVacations() {
+        const { data, error } = await supabase
+            .from('vacations')
+            .select('*')
+            .order('created_at', {
+                ascending: false
+            })
+
+        if (error) {
+            console.error(
+                'Errore caricamento sessioni:',
+                error
+            )
+
+            return
+        }
+
+        setVacations(data || [])
+    }
+
+    // =========================================================================
+    // CARICAMENTO INIZIALE
+    // =========================================================================
+
     useEffect(() => {
         if (!isLogged) return
 
         async function load() {
-            // Carichiamo drink e frasi.
             await loadDrinks()
             await loadPhrases()
+            await loadVacations()
 
-            /*
-             * Recuperiamo anche la configurazione che decide
-             * se mostrare la pagina Vacanza.
-             */
             const { data: config } = await supabase
                 .from(TABLES.appConfig)
                 .select('*')
                 .eq('key', 'vacanza_attiva')
                 .single()
 
-            setVacanzaAttiva(config?.value || false)
+            setVacanzaAttiva(
+                config?.value || false
+            )
         }
 
         load()
     }, [isLogged])
 
     // =========================================================================
-    // MODIFICA LOCALE DI UN DRINK
+    // DRINK - MODIFICA LOCALE
     // =========================================================================
 
-    /*
-     * Aggiorna solamente lo stato React locale.
-     *
-     * NON salva ancora niente su Supabase.
-     *
-     * Il salvataggio vero avviene premendo il pulsante "Salva".
-     */
     function updateDrinkField(id, field, value) {
         setDrinks((prev) =>
             prev.map((drink) =>
@@ -285,13 +180,9 @@ export default function Admin() {
     }
 
     // =========================================================================
-    // SALVATAGGIO DRINK ESISTENTE
+    // DRINK - SALVA
     // =========================================================================
 
-    /*
-     * Salva sul database le modifiche apportate
-     * a una bevanda già esistente.
-     */
     async function saveDrink(drink) {
         await supabase
             .from(TABLES.drinks)
@@ -305,25 +196,13 @@ export default function Admin() {
             })
             .eq('id', drink.id)
 
-        /*
-         * Ricarichiamo dal database per avere
-         * una copia aggiornata e coerente.
-         */
         loadDrinks()
     }
 
     // =========================================================================
-    // ATTIVA / DISATTIVA DRINK
+    // DRINK - ATTIVA / DISATTIVA
     // =========================================================================
 
-    /*
-     * Inverte il valore is_active della bevanda.
-     *
-     * Un drink disattivato:
-     * - rimane nel database
-     * - continua a essere disponibile per i vecchi log
-     * - non viene mostrato tra i pulsanti attivi della Home
-     */
     async function toggleDrink(drink) {
         await supabase
             .from(TABLES.drinks)
@@ -336,14 +215,10 @@ export default function Admin() {
     }
 
     // =========================================================================
-    // AGGIUNTA NUOVO DRINK
+    // DRINK - AGGIUNGI
     // =========================================================================
 
-    /*
-     * Crea una nuova bevanda nella tabella drinks.
-     */
     async function addDrink() {
-        // Tutti i campi principali sono obbligatori.
         if (
             !newDrink.name ||
             !newDrink.emoji ||
@@ -355,9 +230,6 @@ export default function Admin() {
             return
         }
 
-        /*
-         * Inseriamo il drink come attivo di default.
-         */
         await supabase
             .from(TABLES.drinks)
             .insert({
@@ -369,9 +241,6 @@ export default function Admin() {
                 is_active: true
             })
 
-        /*
-         * Reset del form dopo l'inserimento.
-         */
         setNewDrink({
             name: '',
             emoji: '',
@@ -381,21 +250,13 @@ export default function Admin() {
             is_active: true
         })
 
-        // Aggiorniamo la lista.
         loadDrinks()
     }
 
     // =========================================================================
-    // MODIFICA LOCALE DI UNA FRASE
+    // FRASI - MODIFICA LOCALE
     // =========================================================================
 
-    /*
-     * Come per i drink:
-     * modifica solamente lo stato locale React.
-     *
-     * Il database viene modificato solamente quando
-     * viene premuto "Salva".
-     */
     function updatePhraseField(id, field, value) {
         setPhrases((prev) =>
             prev.map((phrase) =>
@@ -410,7 +271,7 @@ export default function Admin() {
     }
 
     // =========================================================================
-    // SALVATAGGIO FRASE ESISTENTE
+    // FRASI - SALVA
     // =========================================================================
 
     async function savePhrase(phrase) {
@@ -427,13 +288,9 @@ export default function Admin() {
     }
 
     // =========================================================================
-    // ATTIVA / DISATTIVA FRASE
+    // FRASI - ATTIVA / DISATTIVA
     // =========================================================================
 
-    /*
-     * Permette di mantenere una frase nel database
-     * senza utilizzarla temporaneamente nella Home.
-     */
     async function togglePhrase(phrase) {
         await supabase
             .from(TABLES.phrases)
@@ -446,19 +303,15 @@ export default function Admin() {
     }
 
     // =========================================================================
-    // AGGIUNTA NUOVA FRASE
+    // FRASI - AGGIUNGI
     // =========================================================================
 
     async function addPhrase() {
-        // Categoria e testo sono obbligatori.
         if (!newPhrase.category || !newPhrase.text) {
             alert('Compila tutti i campi della frase')
             return
         }
 
-        /*
-         * Le nuove frasi vengono create attive.
-         */
         await supabase
             .from(TABLES.phrases)
             .insert({
@@ -467,9 +320,6 @@ export default function Admin() {
                 is_active: true
             })
 
-        /*
-         * Reset del form.
-         */
         setNewPhrase({
             category: 'SOBRIO',
             text: '',
@@ -480,46 +330,241 @@ export default function Admin() {
     }
 
     // =========================================================================
+    // SESSIONI - CREA
+    // =========================================================================
+
+    async function createVacation() {
+        if (
+            !newVacation.title ||
+            !newVacation.slug
+        ) {
+            setSessionMessage(
+                'Titolo e slug sono obbligatori.'
+            )
+
+            return
+        }
+
+        setCreatingSession(true)
+        setSessionMessage('')
+
+        try {
+            const response = await fetch(
+                '/api/admin/vacations/create',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-password': inputPassword
+                    },
+
+                    body: JSON.stringify({
+                        title: newVacation.title,
+                        slug: newVacation.slug,
+                        timezone: newVacation.timezone,
+
+                        startAt:
+                            newVacation.startAt ||
+                            null,
+
+                        endAt:
+                            newVacation.endAt ||
+                            null
+                    })
+                }
+            )
+
+            const result =
+                await response.json()
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error ||
+                    'Errore creazione sessione'
+                )
+            }
+
+            setNewVacation({
+                title: '',
+                slug: '',
+                timezone: 'Europe/Rome',
+                startAt: '',
+                endAt: ''
+            })
+
+            setSessionMessage(
+                'Sessione creata correttamente ✓'
+            )
+
+            await loadVacations()
+
+        } catch (error) {
+            console.error(error)
+
+            setSessionMessage(
+                error.message
+            )
+
+        } finally {
+            setCreatingSession(false)
+        }
+    }
+
+    // =========================================================================
+    // SESSIONI - ATTIVA
+    // =========================================================================
+
+    async function activateVacation(slug) {
+        const confirmed = window.confirm(
+            `Vuoi rendere attiva la sessione "${slug}"?`
+        )
+
+        if (!confirmed) return
+
+        setSessionMessage(
+            'Attivazione in corso...'
+        )
+
+        try {
+            const response = await fetch(
+                '/api/admin/vacations/activate',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type':
+                            'application/json',
+
+                        'x-admin-password':
+                            inputPassword
+                    },
+
+                    body: JSON.stringify({
+                        slug
+                    })
+                }
+            )
+
+            const result =
+                await response.json()
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error ||
+                    'Errore attivazione sessione'
+                )
+            }
+
+            setSessionMessage(
+                'Sessione attivata correttamente ✓'
+            )
+
+            await loadVacations()
+
+            /*
+             * Aggiorniamo anche lo stato del vecchio
+             * flag mostrato in alto nell'Admin.
+             */
+            setVacanzaAttiva(true)
+
+        } catch (error) {
+            console.error(error)
+
+            setSessionMessage(
+                error.message
+            )
+        }
+    }
+
+
+    async function archiveVacation(slug) {
+        const confirmed = window.confirm(
+            `Vuoi davvero terminare e archiviare "${slug}"?\n\nL'app tornerà in modalità Standby.`
+        )
+
+        if (!confirmed) return
+
+        setSessionMessage(
+            'Archiviazione in corso...'
+        )
+
+        try {
+            const response = await fetch(
+                '/api/admin/vacations/archive',
+                {
+                    method: 'POST',
+
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'x-admin-password': inputPassword
+                    },
+
+                    body: JSON.stringify({
+                        slug
+                    })
+                }
+            )
+
+            const result =
+                await response.json()
+
+            if (!response.ok) {
+                throw new Error(
+                    result.error ||
+                    'Errore archiviazione sessione'
+                )
+            }
+
+            setSessionMessage(
+                'Sessione archiviata correttamente ✓'
+            )
+
+            setVacanzaAttiva(false)
+
+            await loadVacations()
+
+        } catch (error) {
+            console.error(error)
+
+            setSessionMessage(
+                error.message
+            )
+        }
+    }
+
+    // =========================================================================
     // ATTIVA / DISATTIVA VACANZA
     // =========================================================================
 
-    /*
-     * Modifica il valore della configurazione:
-     *
-     *     vacanza_attiva
-     *
-     * Questa configurazione viene letta dalla Home
-     * per decidere se mostrare il pulsante "Vacanza".
-     */
     async function toggleVacanza() {
-        const newValue = !vacanzaAttiva
+        const newValue =
+            !vacanzaAttiva
 
         await supabase
             .from(TABLES.appConfig)
             .update({
                 value: newValue
             })
-            .eq('key', 'vacanza_attiva')
+            .eq(
+                'key',
+                'vacanza_attiva'
+            )
 
-        /*
-         * Aggiorniamo immediatamente anche lo stato locale
-         * senza dover ricaricare tutta la configurazione.
-         */
-        setVacanzaAttiva(newValue)
+        setVacanzaAttiva(
+            newValue
+        )
     }
 
     // =========================================================================
-    // SCHERMATA LOGIN ADMIN
+    // LOGIN
     // =========================================================================
 
-    /*
-     * Finché isLogged è false mostriamo solamente
-     * la schermata per inserire la password.
-     */
     if (!isLogged) {
         return (
             <main className={styles.page}>
                 <div className={styles.card}>
+
                     <h1 className={styles.title}>
                         Admin
                     </h1>
@@ -565,6 +610,7 @@ export default function Admin() {
                             {error}
                         </p>
                     )}
+
                 </div>
             </main>
         )
@@ -584,6 +630,7 @@ export default function Admin() {
                     alignItems: 'stretch'
                 }}
             >
+
                 {/* ============================================================
                     HEADER
                     ============================================================ */}
@@ -618,6 +665,7 @@ export default function Admin() {
                         className={styles.button}
                     >
                         Vacanza:{' '}
+
                         {vacanzaAttiva
                             ? 'ATTIVA 🟢'
                             : 'DISATTIVA 🔴'}
@@ -625,7 +673,7 @@ export default function Admin() {
                 </div>
 
                 {/* ============================================================
-                    SELETTORE TAB ADMIN
+                    TAB
                     ============================================================ */}
 
                 <div
@@ -663,6 +711,21 @@ export default function Admin() {
                     >
                         Frasi
                     </button>
+
+                    <button
+                        className={styles.button}
+                        onClick={() =>
+                            setTab('sessions')
+                        }
+                        style={{
+                            opacity:
+                                tab === 'sessions'
+                                    ? 1
+                                    : 0.6
+                        }}
+                    >
+                        Sessioni
+                    </button>
                 </div>
 
                 {/* ============================================================
@@ -671,10 +734,6 @@ export default function Admin() {
 
                 {tab === 'drinks' && (
                     <>
-                        {/* ----------------------------------------------------
-                            AGGIUNGI DRINK
-                            ---------------------------------------------------- */}
-
                         <h2
                             style={{
                                 marginTop: '8px'
@@ -690,7 +749,8 @@ export default function Admin() {
                             onChange={(e) =>
                                 setNewDrink({
                                     ...newDrink,
-                                    name: e.target.value
+                                    name:
+                                        e.target.value
                                 })
                             }
                         />
@@ -702,7 +762,8 @@ export default function Admin() {
                             onChange={(e) =>
                                 setNewDrink({
                                     ...newDrink,
-                                    emoji: e.target.value
+                                    emoji:
+                                        e.target.value
                                 })
                             }
                         />
@@ -772,10 +833,6 @@ export default function Admin() {
                             Aggiungi drink
                         </button>
 
-                        {/* ----------------------------------------------------
-                            DRINK ESISTENTI
-                            ---------------------------------------------------- */}
-
                         <h2
                             style={{
                                 marginTop: '16px'
@@ -784,157 +841,160 @@ export default function Admin() {
                             Drink esistenti
                         </h2>
 
-                        {drinks.map((drink) => (
-                            <div
-                                key={drink.id}
-                                style={{
-                                    border:
-                                        '1px solid #2a2a2a',
-                                    borderRadius:
-                                        '12px',
-                                    padding: '12px',
-                                    display: 'flex',
-                                    flexDirection:
-                                        'column',
-                                    gap: '10px'
-                                }}
-                            >
-                                {/* Nome */}
-                                <input
-                                    className={
-                                        styles.input
-                                    }
-                                    value={drink.name}
-                                    onChange={(e) =>
-                                        updateDrinkField(
-                                            drink.id,
-                                            'name',
-                                            e.target.value
-                                        )
-                                    }
-                                />
-
-                                {/* Emoji */}
-                                <input
-                                    className={
-                                        styles.input
-                                    }
-                                    value={
-                                        drink.emoji || ''
-                                    }
-                                    onChange={(e) =>
-                                        updateDrinkField(
-                                            drink.id,
-                                            'emoji',
-                                            e.target.value
-                                        )
-                                    }
-                                />
-
-                                {/* Volume */}
-                                <input
-                                    className={
-                                        styles.input
-                                    }
-                                    type="number"
-                                    value={
-                                        drink.volume_ml
-                                    }
-                                    onChange={(e) =>
-                                        updateDrinkField(
-                                            drink.id,
-                                            'volume_ml',
-                                            e.target.value
-                                        )
-                                    }
-                                />
-
-                                {/* Percentuale alcol */}
-                                <input
-                                    className={
-                                        styles.input
-                                    }
-                                    type="number"
-                                    value={
-                                        drink.perc_alc
-                                    }
-                                    onChange={(e) =>
-                                        updateDrinkField(
-                                            drink.id,
-                                            'perc_alc',
-                                            e.target.value
-                                        )
-                                    }
-                                />
-
-                                {/* Categoria */}
-                                <select
-                                    className={
-                                        styles.input
-                                    }
-                                    value={
-                                        drink.category ||
-                                        'beer'
-                                    }
-                                    onChange={(e) =>
-                                        updateDrinkField(
-                                            drink.id,
-                                            'category',
-                                            e.target.value
-                                        )
-                                    }
-                                >
-                                    <option value="beer">
-                                        beer
-                                    </option>
-
-                                    <option value="cocktail">
-                                        cocktail
-                                    </option>
-
-                                    <option value="shot">
-                                        shot
-                                    </option>
-                                </select>
-
-                                {/* Azioni */}
+                        {drinks.map(
+                            (drink) => (
                                 <div
+                                    key={drink.id}
                                     style={{
+                                        border:
+                                            '1px solid #2a2a2a',
+                                        borderRadius:
+                                            '12px',
+                                        padding:
+                                            '12px',
                                         display:
                                             'flex',
-                                        gap: '10px'
+                                        flexDirection:
+                                            'column',
+                                        gap:
+                                            '10px'
                                     }}
                                 >
-                                    <button
+                                    <input
                                         className={
-                                            styles.button
+                                            styles.input
                                         }
-                                        onClick={() =>
-                                            saveDrink(
-                                                drink
+                                        value={
+                                            drink.name
+                                        }
+                                        onChange={(e) =>
+                                            updateDrinkField(
+                                                drink.id,
+                                                'name',
+                                                e.target.value
                                             )
                                         }
-                                    >
-                                        Salva
-                                    </button>
+                                    />
 
-                                    <button
+                                    <input
                                         className={
-                                            styles.button
+                                            styles.input
                                         }
-                                        onClick={() =>
-                                            toggleDrink(
-                                                drink
+                                        value={
+                                            drink.emoji ||
+                                            ''
+                                        }
+                                        onChange={(e) =>
+                                            updateDrinkField(
+                                                drink.id,
+                                                'emoji',
+                                                e.target.value
+                                            )
+                                        }
+                                    />
+
+                                    <input
+                                        className={
+                                            styles.input
+                                        }
+                                        type="number"
+                                        value={
+                                            drink.volume_ml
+                                        }
+                                        onChange={(e) =>
+                                            updateDrinkField(
+                                                drink.id,
+                                                'volume_ml',
+                                                e.target.value
+                                            )
+                                        }
+                                    />
+
+                                    <input
+                                        className={
+                                            styles.input
+                                        }
+                                        type="number"
+                                        value={
+                                            drink.perc_alc
+                                        }
+                                        onChange={(e) =>
+                                            updateDrinkField(
+                                                drink.id,
+                                                'perc_alc',
+                                                e.target.value
+                                            )
+                                        }
+                                    />
+
+                                    <select
+                                        className={
+                                            styles.input
+                                        }
+                                        value={
+                                            drink.category ||
+                                            'beer'
+                                        }
+                                        onChange={(e) =>
+                                            updateDrinkField(
+                                                drink.id,
+                                                'category',
+                                                e.target.value
                                             )
                                         }
                                     >
-                                        {drink.is_active
-                                            ? 'Disattiva'
-                                            : 'Attiva'}
-                                    </button>
+                                        <option value="beer">
+                                            beer
+                                        </option>
+
+                                        <option value="cocktail">
+                                            cocktail
+                                        </option>
+
+                                        <option value="shot">
+                                            shot
+                                        </option>
+                                    </select>
+
+                                    <div
+                                        style={{
+                                            display:
+                                                'flex',
+                                            gap:
+                                                '10px'
+                                        }}
+                                    >
+                                        <button
+                                            className={
+                                                styles.button
+                                            }
+                                            onClick={() =>
+                                                saveDrink(
+                                                    drink
+                                                )
+                                            }
+                                        >
+                                            Salva
+                                        </button>
+
+                                        <button
+                                            className={
+                                                styles.button
+                                            }
+                                            onClick={() =>
+                                                toggleDrink(
+                                                    drink
+                                                )
+                                            }
+                                        >
+                                            {drink.is_active
+                                                ? 'Disattiva'
+                                                : 'Attiva'}
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        )}
                     </>
                 )}
 
@@ -944,10 +1004,6 @@ export default function Admin() {
 
                 {tab === 'phrases' && (
                     <>
-                        {/* ----------------------------------------------------
-                            AGGIUNGI FRASE
-                            ---------------------------------------------------- */}
-
                         <h2
                             style={{
                                 marginTop: '8px'
@@ -997,11 +1053,14 @@ export default function Admin() {
                         <input
                             className={styles.input}
                             placeholder="Testo frase"
-                            value={newPhrase.text}
+                            value={
+                                newPhrase.text
+                            }
                             onChange={(e) =>
                                 setNewPhrase({
                                     ...newPhrase,
-                                    text: e.target.value
+                                    text:
+                                        e.target.value
                                 })
                             }
                         />
@@ -1013,10 +1072,6 @@ export default function Admin() {
                             Aggiungi frase
                         </button>
 
-                        {/* ----------------------------------------------------
-                            FRASI ESISTENTI
-                            ---------------------------------------------------- */}
-
                         <h2
                             style={{
                                 marginTop: '16px'
@@ -1025,119 +1080,417 @@ export default function Admin() {
                             Frasi esistenti
                         </h2>
 
-                        {phrases.map((phrase) => (
+                        {phrases.map(
+                            (phrase) => (
+                                <div
+                                    key={
+                                        phrase.id
+                                    }
+                                    style={{
+                                        border:
+                                            '1px solid #2a2a2a',
+                                        borderRadius:
+                                            '12px',
+                                        padding:
+                                            '12px',
+                                        display:
+                                            'flex',
+                                        flexDirection:
+                                            'column',
+                                        gap:
+                                            '10px'
+                                    }}
+                                >
+                                    <select
+                                        className={
+                                            styles.input
+                                        }
+                                        value={
+                                            phrase.category
+                                        }
+                                        onChange={(e) =>
+                                            updatePhraseField(
+                                                phrase.id,
+                                                'category',
+                                                e.target.value
+                                            )
+                                        }
+                                    >
+                                        <option value="SOBRIO">
+                                            SOBRIO
+                                        </option>
+
+                                        <option value="MEDIO BAC">
+                                            MEDIO BAC
+                                        </option>
+
+                                        <option value="ALTO BAC">
+                                            ALTO BAC
+                                        </option>
+
+                                        <option value="LEGGENDA">
+                                            LEGGENDA
+                                        </option>
+
+                                        <option value="BIRRA">
+                                            BIRRA
+                                        </option>
+
+                                        <option value="COCKTAIL">
+                                            COCKTAIL
+                                        </option>
+                                    </select>
+
+                                    <input
+                                        className={
+                                            styles.input
+                                        }
+                                        value={
+                                            phrase.text
+                                        }
+                                        onChange={(e) =>
+                                            updatePhraseField(
+                                                phrase.id,
+                                                'text',
+                                                e.target.value
+                                            )
+                                        }
+                                    />
+
+                                    <div
+                                        style={{
+                                            display:
+                                                'flex',
+                                            gap:
+                                                '10px'
+                                        }}
+                                    >
+                                        <button
+                                            className={
+                                                styles.button
+                                            }
+                                            onClick={() =>
+                                                savePhrase(
+                                                    phrase
+                                                )
+                                            }
+                                        >
+                                            Salva
+                                        </button>
+
+                                        <button
+                                            className={
+                                                styles.button
+                                            }
+                                            onClick={() =>
+                                                togglePhrase(
+                                                    phrase
+                                                )
+                                            }
+                                        >
+                                            {phrase.is_active
+                                                ? 'Disattiva'
+                                                : 'Attiva'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        )}
+                    </>
+                )}
+
+                {/* ============================================================
+                    TAB SESSIONI
+                    ============================================================ */}
+
+                {tab === 'sessions' && (
+                    <>
+                        <h2
+                            style={{
+                                marginTop: '8px'
+                            }}
+                        >
+                            Nuova sessione
+                        </h2>
+
+                        <p
+                            style={{
+                                opacity: 0.7,
+                                marginTop: 0
+                            }}
+                        >
+                            Crea una nuova vacanza.
+                            La sessione verrà creata
+                            inizialmente come DRAFT e
+                            non sarà ancora attiva.
+                        </p>
+
+                        <input
+                            className={styles.input}
+                            placeholder="Titolo — es. IBIZA 2027"
+                            value={
+                                newVacation.title
+                            }
+                            onChange={(e) =>
+                                setNewVacation({
+                                    ...newVacation,
+                                    title:
+                                        e.target.value
+                                })
+                            }
+                        />
+
+                        <input
+                            className={styles.input}
+                            placeholder="Slug — es. ibiza_2027"
+                            value={
+                                newVacation.slug
+                            }
+                            onChange={(e) =>
+                                setNewVacation({
+                                    ...newVacation,
+
+                                    slug:
+                                        e.target.value
+                                            .toLowerCase()
+                                            .replace(
+                                                /[^a-z0-9_]/g,
+                                                '_'
+                                            )
+                                })
+                            }
+                        />
+
+                        <input
+                            className={styles.input}
+                            placeholder="Timezone"
+                            value={
+                                newVacation.timezone
+                            }
+                            onChange={(e) =>
+                                setNewVacation({
+                                    ...newVacation,
+
+                                    timezone:
+                                        e.target.value
+                                })
+                            }
+                        />
+
+                        <label
+                            style={{
+                                opacity: 0.7,
+                                fontSize: '13px',
+                                marginTop: '5px'
+                            }}
+                        >
+                            Inizio vacanza
+                        </label>
+
+                        <input
+                            className={styles.input}
+                            type="datetime-local"
+                            value={
+                                newVacation.startAt
+                            }
+                            onChange={(e) =>
+                                setNewVacation({
+                                    ...newVacation,
+
+                                    startAt:
+                                        e.target.value
+                                })
+                            }
+                        />
+
+                        <label
+                            style={{
+                                opacity: 0.7,
+                                fontSize: '13px',
+                                marginTop: '5px'
+                            }}
+                        >
+                            Fine vacanza
+                        </label>
+
+                        <input
+                            className={styles.input}
+                            type="datetime-local"
+                            value={
+                                newVacation.endAt
+                            }
+                            onChange={(e) =>
+                                setNewVacation({
+                                    ...newVacation,
+
+                                    endAt:
+                                        e.target.value
+                                })
+                            }
+                        />
+
+                        <button
+                            className={styles.button}
+                            onClick={
+                                createVacation
+                            }
+                            disabled={
+                                creatingSession
+                            }
+                        >
+                            {creatingSession
+                                ? 'Creazione...'
+                                : 'Crea sessione'}
+                        </button>
+
+                        {sessionMessage && (
                             <div
-                                key={phrase.id}
                                 style={{
+                                    marginTop:
+                                        '10px',
+                                    padding:
+                                        '12px',
                                     border:
                                         '1px solid #2a2a2a',
                                     borderRadius:
-                                        '12px',
-                                    padding: '12px',
-                                    display: 'flex',
-                                    flexDirection:
-                                        'column',
-                                    gap: '10px'
+                                        '12px'
                                 }}
                             >
-                                {/* Categoria frase */}
-                                <select
-                                    className={
-                                        styles.input
-                                    }
-                                    value={
-                                        phrase.category
-                                    }
-                                    onChange={(e) =>
-                                        updatePhraseField(
-                                            phrase.id,
-                                            'category',
-                                            e.target.value
-                                        )
-                                    }
-                                >
-                                    <option value="SOBRIO">
-                                        SOBRIO
-                                    </option>
+                                {sessionMessage}
+                            </div>
+                        )}
 
-                                    <option value="MEDIO BAC">
-                                        MEDIO BAC
-                                    </option>
+                        <h2
+                            style={{
+                                marginTop: '28px'
+                            }}
+                        >
+                            Sessioni esistenti
+                        </h2>
 
-                                    <option value="ALTO BAC">
-                                        ALTO BAC
-                                    </option>
-
-                                    <option value="LEGGENDA">
-                                        LEGGENDA
-                                    </option>
-
-                                    <option value="BIRRA">
-                                        BIRRA
-                                    </option>
-
-                                    <option value="COCKTAIL">
-                                        COCKTAIL
-                                    </option>
-                                </select>
-
-                                {/* Testo frase */}
-                                <input
-                                    className={
-                                        styles.input
-                                    }
-                                    value={
-                                        phrase.text
-                                    }
-                                    onChange={(e) =>
-                                        updatePhraseField(
-                                            phrase.id,
-                                            'text',
-                                            e.target.value
-                                        )
-                                    }
-                                />
-
-                                {/* Azioni */}
+                        {vacations.map(
+                            (vacation) => (
                                 <div
+                                    key={
+                                        vacation.id
+                                    }
                                     style={{
-                                        display:
-                                            'flex',
-                                        gap: '10px'
+                                        border:
+                                            '1px solid #2a2a2a',
+                                        borderRadius:
+                                            '12px',
+                                        padding:
+                                            '14px',
+                                        marginBottom:
+                                            '10px'
                                     }}
                                 >
-                                    <button
-                                        className={
-                                            styles.button
-                                        }
-                                        onClick={() =>
-                                            savePhrase(
-                                                phrase
-                                            )
-                                        }
+                                    <div
+                                        style={{
+                                            fontSize:
+                                                '18px',
+                                            fontWeight:
+                                                '600'
+                                        }}
                                     >
-                                        Salva
-                                    </button>
+                                        {
+                                            vacation.title
+                                        }
+                                    </div>
 
-                                    <button
-                                        className={
-                                            styles.button
-                                        }
-                                        onClick={() =>
-                                            togglePhrase(
-                                                phrase
-                                            )
-                                        }
+                                    <div
+                                        style={{
+                                            marginTop:
+                                                '5px',
+                                            opacity:
+                                                0.65,
+                                            fontSize:
+                                                '13px'
+                                        }}
                                     >
-                                        {phrase.is_active
-                                            ? 'Disattiva'
-                                            : 'Attiva'}
-                                    </button>
+                                        {
+                                            vacation.slug
+                                        }
+                                    </div>
+
+                                    <div
+                                        style={{
+                                            marginTop:
+                                                '10px',
+                                            fontSize:
+                                                '13px'
+                                        }}
+                                    >
+                                        Stato:{' '}
+
+                                        <strong>
+                                            {
+                                                vacation.status
+                                                    ?.toUpperCase()
+                                            }
+                                        </strong>
+                                    </div>
+
+                                    {/* =========================================
+                                        PULSANTE RENDI ATTIVA
+
+                                        Compare solamente sulle sessioni DRAFT.
+                                        ========================================= */}
+
+                                    {vacation.status === 'draft' && (
+                                        <button
+                                            className={
+                                                styles.button
+                                            }
+                                            style={{
+                                                marginTop:
+                                                    '12px'
+                                            }}
+                                            onClick={() =>
+                                                activateVacation(
+                                                    vacation.slug
+                                                )
+                                            }
+                                        >
+                                            Rendi attiva
+                                        </button>
+                                    )}
+
+                                    {vacation.status === 'active' && (
+                                        <button
+                                            className={styles.button}
+                                            style={{
+                                                marginTop: '12px'
+                                            }}
+                                            onClick={() =>
+                                                archiveVacation(
+                                                    vacation.slug
+                                                )
+                                            }
+                                        >
+                                            Termina e archivia
+                                        </button>
+                                    )}
+
                                 </div>
-                            </div>
-                        ))}
+                            )
+                        )}
+
+
+
+                        {vacations.length === 0 && (
+                            <p
+                                style={{
+                                    opacity: 0.6
+                                }}
+                            >
+                                Nessuna sessione presente.
+                            </p>
+                        )}
+
                     </>
                 )}
+
             </div>
         </main>
     )

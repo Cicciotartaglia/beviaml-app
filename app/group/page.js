@@ -14,7 +14,10 @@ import {
 } from 'recharts'
 
 import { supabase } from '../../lib/supabase'
-import { TABLES } from '../../lib/tableNames'
+import {
+    TABLES,
+    getVacationTables
+} from '../../lib/tableNames'
 import styles from './group.module.css'
 
 /*
@@ -89,6 +92,10 @@ NON viene utilizzato per:
 
 export default function GroupPage() {
     const router = useRouter()
+
+    const [sessionTables, setSessionTables] = useState(null)
+    const [sessionResolved, setSessionResolved] = useState(false)
+    const [vacationTitle, setVacationTitle] = useState('')
 
     // ==========================================================================
     // STATO DELLA PAGINA
@@ -329,7 +336,11 @@ export default function GroupPage() {
      *
      * Questo è particolarmente utile per costruire il grafico.
      */
-    async function loadTodayLogs() {
+    async function loadTodayLogs(tables = sessionTables) {
+        if (!tables) {
+            return []
+        }
+
         const {
             start,
             end
@@ -337,7 +348,7 @@ export default function GroupPage() {
 
         const { data } =
             await supabase
-                .from(TABLES.drinkLogs)
+                .from(tables.drinkLogs)
                 .select('*')
                 .gte(
                     'created_at',
@@ -793,42 +804,128 @@ export default function GroupPage() {
     // CARICAMENTO INIZIALE
     // ==========================================================================
 
+    // ==========================================================================
+    // RISOLUZIONE SESSIONE ATTIVA
+    // ==========================================================================
+
     useEffect(() => {
+        let cancelled = false
+
+        async function resolveActiveSession() {
+            const {
+                data: config,
+                error
+            } =
+                await supabase
+                    .from(TABLES.appConfig)
+                    .select('text_value')
+                    .eq(
+                        'key',
+                        'active_vacation_slug'
+                    )
+                    .maybeSingle()
+
+            if (cancelled) return
+
+            const slug =
+                config?.text_value
+                    ?.trim()
+
+            if (
+                error ||
+                !slug
+            ) {
+                if (error) {
+                    console.error(
+                        'Errore lettura sessione attiva:',
+                        error
+                    )
+                }
+
+                setSessionTables(null)
+                setSessionResolved(true)
+
+                router.replace('/standby')
+
+                return
+            }
+
+            const tables =
+                getVacationTables(slug)
+
+            setSessionTables(tables)
+
+            const {
+                data: vacation
+            } =
+                await supabase
+                    .from('vacations')
+                    .select('title')
+                    .eq(
+                        'slug',
+                        slug
+                    )
+                    .maybeSingle()
+
+            if (cancelled) return
+
+            setVacationTitle(
+                vacation?.title ||
+                slug
+            )
+
+            setSessionResolved(true)
+        }
+
+        resolveActiveSession()
+
+        return () => {
+            cancelled = true
+        }
+    }, [router])
+
+
+    // ==========================================================================
+    // CARICAMENTO DATI SESSIONE
+    // ==========================================================================
+
+    useEffect(() => {
+        if (
+            !sessionResolved ||
+            !sessionTables
+        ) {
+            return
+        }
+
         async function load() {
             setDayLabel(
                 getDayLabel()
             )
 
-            // -----------------------------------------------------------------------
             // LOG
-            // -----------------------------------------------------------------------
 
             const loadedLogs =
-                await loadTodayLogs()
+                await loadTodayLogs(
+                    sessionTables
+                )
 
-            // -----------------------------------------------------------------------
             // DRINK
-            // -----------------------------------------------------------------------
 
             const {
                 data: drinksData
             } =
                 await supabase
-                    .from(
-                        TABLES.drinks
-                    )
+                    .from(TABLES.drinks)
                     .select('*')
 
-            // -----------------------------------------------------------------------
-            // UTENTI
-            // -----------------------------------------------------------------------
+            // UTENTI DELLA SESSIONE ATTIVA
 
             const {
                 data: usersData
             } =
                 await supabase
                     .from(
-                        TABLES.users
+                        sessionTables.users
                     )
                     .select('*')
                     .order(
@@ -838,9 +935,7 @@ export default function GroupPage() {
                         }
                     )
 
-            // -----------------------------------------------------------------------
-            // PICCHI BAC
-            // -----------------------------------------------------------------------
+            // PICCHI DELLA SESSIONE ATTIVA
 
             const dayStart =
                 getDayStart()
@@ -851,7 +946,7 @@ export default function GroupPage() {
             } =
                 await supabase
                     .from(
-                        TABLES.dailyBacPeaks
+                        sessionTables.dailyBacPeaks
                     )
                     .select('*')
                     .eq(
@@ -868,10 +963,6 @@ export default function GroupPage() {
             const safePeaks =
                 peaksData || []
 
-            // -----------------------------------------------------------------------
-            // SALVATAGGIO DATI BASE
-            // -----------------------------------------------------------------------
-
             setLogs(
                 loadedLogs
             )
@@ -887,10 +978,6 @@ export default function GroupPage() {
             setPeaks(
                 safePeaks
             )
-
-            // -----------------------------------------------------------------------
-            // CALCOLO DATI DERIVATI
-            // -----------------------------------------------------------------------
 
             setCounters(
                 computeCounters(
@@ -932,7 +1019,11 @@ export default function GroupPage() {
         }
 
         load()
-    }, [])
+
+    }, [
+        sessionResolved,
+        sessionTables
+    ])
 
     // ==========================================================================
     // CLASSIFICA ATTIVA
@@ -1697,7 +1788,12 @@ export default function GroupPage() {
     // ==========================================================================
     // INTERFACCIA
     // ==========================================================================
-
+    if (
+        !sessionResolved ||
+        !sessionTables
+    ) {
+        return null
+    }
     return (
         <main
             className={

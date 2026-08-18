@@ -6,105 +6,86 @@ import { supabase } from '../../lib/supabase'
 
 import {
   TABLES,
-  ACTIVE_DATASET_NAME
+  getVacationTables
 } from '../../lib/tableNames'
 
 import styles from './home.module.css'
-
-/*
-===============================================================================
-HOME PAGE - V2
-===============================================================================
-
-Questa è la schermata principale dell'app.
-
-OBIETTIVI DELLA V2:
-
-- mantenere l'inserimento delle bevute estremamente rapido
-- dare maggiore importanza ai pulsanti dei drink
-- mantenere il BAC come elemento visivo interessante
-- abbandonare il vecchio contagiri
-- utilizzare un design più pulito e minimale
-- mostrare fino a 10 bevute recenti
-
-
-MODALITÀ LIMBO
--------------------------------------------------------------------------------
-
-Quando ACTIVE_DATASET_NAME === 'limbo':
-
-- la Home normale NON viene caricata;
-- non vengono effettuate query sui dati Limbo;
-- non vengono mostrati BAC, drink, statistiche o storico;
-- l'utente viene automaticamente mandato a:
-
-      /standby
-
-La pagina Standby permette solamente di:
-
-- consultare le vecchie vacanze;
-- accedere all'Admin.
-
-In questo modo la versione online dell'app può restare disponibile
-anche quando non è in corso nessuna vacanza reale.
-
-===============================================================================
-*/
 
 export default function Home() {
   const router = useRouter()
 
   // ==========================================================================
-  // MODALITÀ LIMBO
+  // SESSIONE ATTIVA
   // ==========================================================================
 
   /*
-   * ACTIVE_DATASET_NAME viene deciso in:
+   * La Home non usa più NEXT_PUBLIC_ACTIVE_DATASET
+   * per decidere quale vacanza utilizzare.
    *
-   *     lib/tableNames.js
+   * Legge invece:
    *
-   * In locale normalmente avremo:
+   * app_config
+   *      ↓
+   * active_vacation_slug
    *
-   *     test
+   * Esempio:
    *
-   * mentre sulla versione online, quando non è in corso
-   * una vacanza, avremo:
+   * test_sessione
    *
-   *     limbo
+   * produce:
+   *
+   * users_test_sessione
+   * drink_logs_test_sessione
+   * daily_bac_peaks_test_sessione
    */
-  const isLimbo =
-    ACTIVE_DATASET_NAME === 'limbo'
+
+  const [
+    sessionTables,
+    setSessionTables
+  ] = useState(null)
+
+  const [
+    sessionResolved,
+    setSessionResolved
+  ] = useState(false)
 
   // ==========================================================================
   // STATO DELLA PAGINA
   // ==========================================================================
 
-  const [drinks, setDrinks] = useState([])
-  const [logs, setLogs] = useState([])
-  const [user, setUser] = useState(null)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [vacanzaAttiva, setVacanzaAttiva] = useState(false)
-  const [phrases, setPhrases] = useState([])
+  const [drinks, setDrinks] =
+    useState([])
+
+  const [logs, setLogs] =
+    useState([])
+
+  const [user, setUser] =
+    useState(null)
+
+  const [menuOpen, setMenuOpen] =
+    useState(false)
+
+  const [
+    vacanzaAttiva,
+    setVacanzaAttiva
+  ] = useState(false)
+
+  const [phrases, setPhrases] =
+    useState([])
 
   // ==========================================================================
   // CALCOLO BAC
   // ==========================================================================
 
-  /*
-   * Algoritmo BAC attuale.
-   *
-   * K rappresenta il decadimento orario utilizzato
-   * per stimare lo smaltimento dell'alcol.
-   *
-   * Dopo l'analisi dei dati reali di Creta 2026
-   * abbiamo deciso di utilizzare:
-   *
-   *     K = 0.15
-   */
-  function calculateBAC(user, drinks, now = Date.now()) {
+  function calculateBAC(
+    user,
+    drinks,
+    now = Date.now()
+  ) {
     const K = 0.15
 
     const LOOKBACK_HOURS = 12
+
     const LOOKBACK_MS =
       LOOKBACK_HOURS *
       60 *
@@ -122,19 +103,16 @@ export default function Home() {
 
     const bmi =
       weightKg /
-      (heightM * heightM)
+      (
+        heightM *
+        heightM
+      )
 
-    /*
-     * Coefficiente di distribuzione r
-     * stimato a partire dal BMI.
-     */
     let r =
       1.0181 -
-      0.01213 * bmi
+      0.01213 *
+      bmi
 
-    /*
-     * Evitiamo valori estremi.
-     */
     r =
       Math.max(
         0.45,
@@ -144,12 +122,6 @@ export default function Home() {
         )
       )
 
-    /*
-     * Consideriamo solamente le bevute:
-     *
-     * - non future;
-     * - comprese nelle ultime 12 ore.
-     */
     const validDrinks =
       drinks
         .filter(
@@ -171,10 +143,6 @@ export default function Home() {
             b.timestamp
         )
 
-    /*
-     * Nessuna bevuta valida:
-     * BAC = 0.
-     */
     if (
       validDrinks.length ===
       0
@@ -188,23 +156,15 @@ export default function Home() {
       validDrinks[0]
         .timestamp
 
-    /*
-     * Ricostruiamo cronologicamente
-     * l'andamento del BAC.
-     */
     for (
       let i = 0;
-      i < validDrinks.length;
+      i <
+      validDrinks.length;
       i++
     ) {
       const drink =
         validDrinks[i]
 
-      /*
-       * Prima di aggiungere la nuova bevuta
-       * sottraiamo lo smaltimento avvenuto
-       * dalla bevuta precedente.
-       */
       if (i > 0) {
         const hoursPassed =
           (
@@ -222,12 +182,6 @@ export default function Home() {
           )
       }
 
-      /*
-       * Grammi di alcol puro.
-       *
-       * 0.789 = densità approssimativa
-       * dell'etanolo in g/ml.
-       */
       const grams =
         drink.volumeMl *
         (
@@ -236,10 +190,6 @@ export default function Home() {
         ) *
         0.789
 
-      /*
-       * Incremento BAC prodotto
-       * dalla bevuta.
-       */
       const deltaBAC =
         grams /
         (
@@ -254,10 +204,6 @@ export default function Home() {
         drink.timestamp
     }
 
-    /*
-     * Smaltimento avvenuto dall'ultima bevuta
-     * fino al momento attuale.
-     */
     const finalHoursPassed =
       (
         now -
@@ -283,24 +229,12 @@ export default function Home() {
   // CONVERSIONE LOG -> FORMATO BAC
   // ==========================================================================
 
-  /*
-   * drink_logs contiene:
-   *
-   *     drink_id
-   *     created_at
-   *
-   * calculateBAC() vuole invece:
-   *
-   *     volumeMl
-   *     abv
-   *     timestamp
-   *
-   * Questa funzione effettua la conversione.
-   */
   function buildBACDrinks() {
     const result = []
 
-    for (const log of logs) {
+    for (
+      const log of logs
+    ) {
       const drink =
         drinks.find(
           (d) =>
@@ -335,13 +269,6 @@ export default function Home() {
   // STATO UTILIZZATO PER LE FRASI
   // ==========================================================================
 
-  /*
-   * Questa funzione determina quale categoria
-   * di frase utilizzare.
-   *
-   * Oltre al BAC considera anche il numero
-   * di birre/cocktail bevuti nelle ultime 3 ore.
-   */
   function getState(bac) {
     const THREE_HOURS_MS =
       3 *
@@ -355,7 +282,9 @@ export default function Home() {
     let beerCount = 0
     let cocktailCount = 0
 
-    for (const log of logs) {
+    for (
+      const log of logs
+    ) {
       const logTime =
         new Date(
           log.created_at
@@ -365,12 +294,6 @@ export default function Home() {
         now -
         logTime
 
-      /*
-       * Ignoriamo:
-       *
-       * - bevute future;
-       * - bevute più vecchie di 3 ore.
-       */
       if (
         diff < 0 ||
         diff >
@@ -412,10 +335,6 @@ export default function Home() {
       }
     }
 
-    /*
-     * Le categorie BIRRA e COCKTAIL
-     * hanno priorità sulla categoria BAC.
-     */
     if (
       beerCount >= 4
     ) {
@@ -444,17 +363,9 @@ export default function Home() {
   }
 
   // ==========================================================================
-  // STATO VISIVO DELLA CARD BAC
+  // STATO VISIVO BAC
   // ==========================================================================
 
-  /*
-   * A differenza di getState(),
-   * questa funzione NON considera
-   * il numero di birre o cocktail.
-   *
-   * Serve solamente per mostrare
-   * il livello BAC nella card.
-   */
   function getBACVisualState(
     bac
   ) {
@@ -508,13 +419,9 @@ export default function Home() {
   }
 
   // ==========================================================================
-  // FRASE DIVERTENTE
+  // FRASE
   // ==========================================================================
 
-  /*
-   * Recupera casualmente una frase attiva
-   * appartenente alla categoria selezionata.
-   */
   function getPhrase(
     category
   ) {
@@ -532,11 +439,6 @@ export default function Home() {
           normalizedCategory
       )
 
-    /*
-     * Se non esiste nessuna frase,
-     * mostriamo direttamente il nome
-     * della categoria.
-     */
     if (
       matchingPhrases.length ===
       0
@@ -559,15 +461,9 @@ export default function Home() {
   }
 
   // ==========================================================================
-  // STIMA RITORNO A ZERO
+  // RITORNO A ZERO
   // ==========================================================================
 
-  /*
-   * Utilizziamo lo stesso coefficiente
-   * di decadimento del calcolo BAC:
-   *
-   *     K = 0.15 g/L/h
-   */
   function getSoberCountdown(
     bac
   ) {
@@ -593,13 +489,6 @@ export default function Home() {
       totalMinutes %
       60
 
-    /*
-     * Formato leggibile.
-     *
-     * Esempio:
-     *
-     *     4 h 20 min
-     */
     if (hh <= 0) {
       return `${mm} min`
     }
@@ -611,17 +500,18 @@ export default function Home() {
   // CARICAMENTO LOG
   // ==========================================================================
 
-  /*
-   * Carica tutte le bevute dell'utente
-   * dal dataset attualmente selezionato.
-   */
   async function loadLogs(
-    userId
+    userId,
+    tables = sessionTables
   ) {
+    if (!tables) {
+      return
+    }
+
     const { data } =
       await supabase
         .from(
-          TABLES.drinkLogs
+          tables.drinkLogs
         )
         .select('*')
         .eq(
@@ -645,55 +535,129 @@ export default function Home() {
   // CARICAMENTO UTENTE
   // ==========================================================================
 
-  /*
-   * Recupera peso, altezza e nickname
-   * dell'utente corrente.
-   */
   async function loadUser(
-    userId
+    userId,
+    tables = sessionTables
   ) {
+    if (!tables) {
+      return
+    }
+
     const { data } =
       await supabase
         .from(
-          TABLES.users
+          tables.users
         )
         .select('*')
         .eq(
           'id',
           userId
         )
-        .single()
+        .maybeSingle()
 
-    setUser(data)
+    setUser(
+      data || null
+    )
   }
 
   // ==========================================================================
-  // REDIRECT AUTOMATICO DEL LIMBO
+  // RISOLUZIONE SESSIONE ATTIVA
   // ==========================================================================
 
-  /*
-   * Se il dataset attivo è LIMBO,
-   * /home non deve essere utilizzata.
-   *
-   * Mandiamo immediatamente l'utente alla pagina:
-   *
-   *     /standby
-   *
-   * Usiamo replace() invece di push():
-   *
-   * se l'utente preme "indietro" dal browser
-   * non vogliamo riportarlo alla Home completa.
-   */
   useEffect(() => {
-    if (isLimbo) {
-      router.replace(
-        '/standby'
+    let cancelled = false
+
+    async function resolveActiveSession() {
+      const {
+        data: config,
+        error
+      } =
+        await supabase
+          .from(
+            TABLES.appConfig
+          )
+          .select(
+            'text_value'
+          )
+          .eq(
+            'key',
+            'active_vacation_slug'
+          )
+          .maybeSingle()
+
+      if (cancelled) {
+        return
+      }
+
+      const slug =
+        config?.text_value
+          ?.trim()
+
+      /*
+       * Nessuna sessione attiva:
+       * andiamo in Standby.
+       */
+      if (
+        error ||
+        !slug
+      ) {
+        if (error) {
+          console.error(
+            'Errore lettura sessione attiva:',
+            error
+          )
+        }
+
+        setSessionTables(
+          null
+        )
+
+        setVacanzaAttiva(
+          false
+        )
+
+        setSessionResolved(
+          true
+        )
+
+        router.replace(
+          '/standby'
+        )
+
+        return
+      }
+
+      /*
+       * Costruiamo i nomi delle tabelle:
+       *
+       * users_<slug>
+       * drink_logs_<slug>
+       * daily_bac_peaks_<slug>
+       */
+      const tables =
+        getVacationTables(
+          slug
+        )
+
+      setSessionTables(
+        tables
+      )
+
+      setVacanzaAttiva(
+        true
+      )
+
+      setSessionResolved(
+        true
       )
     }
-  }, [
-    isLimbo,
-    router
-  ])
+
+    resolveActiveSession()
+
+    return () => {
+      cancelled = true
+    }
+  }, [router])
 
   // ==========================================================================
   // CARICAMENTO INIZIALE
@@ -701,34 +665,21 @@ export default function Home() {
 
   useEffect(() => {
     /*
-     * Nel Limbo NON carichiamo nessun dato della Home.
-     *
-     * Il redirect verso /standby viene gestito
-     * dal useEffect precedente.
-     *
-     * Questo evita query inutili verso:
-     *
-     * users_limbo
-     * drink_logs_limbo
-     * daily_bac_peaks_limbo
+     * Aspettiamo di conoscere
+     * la sessione attiva.
      */
-    if (isLimbo) {
+    if (
+      !sessionResolved ||
+      !sessionTables
+    ) {
       return
     }
 
-    /*
-     * Recuperiamo l'utente salvato
-     * nel browser.
-     */
     const userId =
       localStorage.getItem(
         'user_id'
       )
 
-    /*
-     * Se non esiste un utente selezionato,
-     * torniamo alla registrazione/login.
-     */
     if (!userId) {
       router.push('/')
       return
@@ -736,7 +687,7 @@ export default function Home() {
 
     async function loadAll() {
       // ----------------------------------------------------------------------
-      // DRINK ATTIVI
+      // DRINK
       // ----------------------------------------------------------------------
 
       const {
@@ -757,7 +708,7 @@ export default function Home() {
       )
 
       // ----------------------------------------------------------------------
-      // FRASI ATTIVE
+      // FRASI
       // ----------------------------------------------------------------------
 
       const {
@@ -778,69 +729,34 @@ export default function Home() {
       )
 
       // ----------------------------------------------------------------------
-      // DATI PERSONALI
+      // UTENTE + LOG DELLA SESSIONE ATTIVA
       // ----------------------------------------------------------------------
 
       await loadLogs(
-        userId
+        userId,
+        sessionTables
       )
 
       await loadUser(
-        userId
-      )
-
-      // ----------------------------------------------------------------------
-      // CONFIGURAZIONE PAGINA VACANZA
-      // ----------------------------------------------------------------------
-
-      /*
-       * vacanza_attiva controlla la visibilità
-       * della voce "Vacanza" nel menu.
-       *
-       * Questo sistema verrà successivamente
-       * sostituito dalla gestione delle sessioni
-       * direttamente dall'Admin.
-       */
-      const {
-        data: config
-      } =
-        await supabase
-          .from(
-            TABLES.appConfig
-          )
-          .select('*')
-          .eq(
-            'key',
-            'vacanza_attiva'
-          )
-          .single()
-
-      setVacanzaAttiva(
-        config?.value ||
-        false
+        userId,
+        sessionTables
       )
     }
 
     loadAll()
   }, [
     router,
-    isLimbo
+    sessionResolved,
+    sessionTables
   ])
 
   // ==========================================================================
   // DATI DERIVATI
   // ==========================================================================
 
-  /*
-   * Trasformiamo i log nel formato
-   * richiesto dall'algoritmo BAC.
-   */
   const bacDrinks =
     buildBACDrinks()
 
-  /*
-   * BAC corrente.
-   */
   const bac =
     user
       ? calculateBAC(
@@ -855,44 +771,30 @@ export default function Home() {
       )
       : 0
 
-  /*
-   * Stato utilizzato per scegliere la frase.
-   */
   const stato =
-    getState(bac)
+    getState(
+      bac
+    )
 
   const fraseCorrente =
-    getPhrase(stato)
+    getPhrase(
+      stato
+    )
 
-  /*
-   * Stato utilizzato invece
-   * dalla card BAC.
-   */
   const bacVisualState =
     getBACVisualState(
       bac
     )
 
-  /*
-   * Stima del ritorno a BAC zero.
-   */
   const soberText =
     getSoberCountdown(
       bac
     )
 
   // ==========================================================================
-  // POSIZIONE DEL PALLINO SULLA SCALA BAC
+  // SCALA BAC
   // ==========================================================================
 
-  /*
-   * La scala visiva va da:
-   *
-   *     0 -> 3.0
-   *
-   * Qualunque valore superiore viene bloccato
-   * all'estremità destra.
-   */
   const BAC_SCALE_MAX =
     3
 
@@ -913,13 +815,6 @@ export default function Home() {
   // ULTIME 10 BEVUTE
   // ==========================================================================
 
-  /*
-   * Nella V1 mostravamo soltanto
-   * le ultime 5 bevute.
-   *
-   * Dopo l'utilizzo reale abbiamo deciso
-   * di portarle a 10.
-   */
   const displayedLogs =
     useMemo(
       () =>
@@ -931,22 +826,9 @@ export default function Home() {
     )
 
   // ==========================================================================
-  // GIORNATA 08:00 -> 08:00
+  // GIORNATA 08 -> 08
   // ==========================================================================
 
-  /*
-   * La "giornata alcolica" non termina
-   * a mezzanotte.
-   *
-   * Va:
-   *
-   *     08:00
-   *       ->
-   *     08:00 del giorno successivo
-   *
-   * Questo permette alle bevute fatte durante
-   * la notte di appartenere alla serata corretta.
-   */
   function getDayStart(
     now = new Date()
   ) {
@@ -963,10 +845,6 @@ export default function Home() {
       0
     )
 
-    /*
-     * Se siamo prima delle 08:00
-     * apparteniamo ancora alla giornata precedente.
-     */
     if (
       current.getHours() <
       8
@@ -981,34 +859,20 @@ export default function Home() {
   }
 
   // ==========================================================================
-  // AGGIORNAMENTO PICCO BAC
+  // PICCO BAC
   // ==========================================================================
 
-  /*
-   * Ogni volta che viene inserita una bevuta,
-   * ricalcoliamo il BAC corrente.
-   *
-   * Se è superiore al massimo già registrato
-   * per quella giornata, aggiorniamo:
-   *
-   *     daily_bac_peaks
-   */
   async function updateDailyBacPeak(
     userId,
     updatedLogs
   ) {
-    /*
-     * Senza dati utente non possiamo
-     * calcolare correttamente il BAC.
-     */
-    if (!user) {
+    if (
+      !sessionTables ||
+      !user
+    ) {
       return
     }
 
-    /*
-     * Convertiamo i log nel formato
-     * dell'algoritmo BAC.
-     */
     const bacDrinks =
       updatedLogs
         .map(
@@ -1046,9 +910,6 @@ export default function Home() {
           Boolean
         )
 
-    /*
-     * BAC corrente dopo la nuova bevuta.
-     */
     const currentBac =
       calculateBAC(
         {
@@ -1064,24 +925,18 @@ export default function Home() {
     const now =
       new Date()
 
-    /*
-     * Giorno 08:00 -> 08:00.
-     */
     const dayStart =
       getDayStart(
         now
       ).toISOString()
 
-    /*
-     * Cerchiamo il picco eventualmente
-     * già presente.
-     */
     const {
       data: existingPeak
     } =
       await supabase
         .from(
-          TABLES.dailyBacPeaks
+          sessionTables
+            .dailyBacPeaks
         )
         .select('*')
         .eq(
@@ -1094,14 +949,11 @@ export default function Home() {
         )
         .maybeSingle()
 
-    /*
-     * Nessun record:
-     * creiamo il primo picco della giornata.
-     */
     if (!existingPeak) {
       await supabase
         .from(
-          TABLES.dailyBacPeaks
+          sessionTables
+            .dailyBacPeaks
         )
         .insert({
           user_id:
@@ -1120,21 +972,18 @@ export default function Home() {
       return
     }
 
-    /*
-     * Record già esistente:
-     * aggiorniamo solamente se il nuovo BAC
-     * supera il massimo precedente.
-     */
     if (
       currentBac >
       Number(
-        existingPeak.peak_bac ||
+        existingPeak
+          .peak_bac ||
         0
       )
     ) {
       await supabase
         .from(
-          TABLES.dailyBacPeaks
+          sessionTables
+            .dailyBacPeaks
         )
         .update({
           peak_bac:
@@ -1154,13 +1003,13 @@ export default function Home() {
   // INSERIMENTO BEVUTA
   // ==========================================================================
 
-  /*
-   * Viene chiamata quando l'utente
-   * preme uno dei pulsanti drink.
-   */
   async function handleDrinkClick(
     drinkId
   ) {
+    if (!sessionTables) {
+      return
+    }
+
     const userId =
       localStorage.getItem(
         'user_id'
@@ -1170,13 +1019,10 @@ export default function Home() {
       return
     }
 
-    /*
-     * Salviamo la nuova bevuta
-     * nel dataset corrente.
-     */
     await supabase
       .from(
-        TABLES.drinkLogs
+        sessionTables
+          .drinkLogs
       )
       .insert({
         user_id:
@@ -1186,9 +1032,6 @@ export default function Home() {
           drinkId
       })
 
-    /*
-     * Feedback aptico sui dispositivi compatibili.
-     */
     if (
       navigator.vibrate
     ) {
@@ -1197,16 +1040,13 @@ export default function Home() {
       )
     }
 
-    /*
-     * Ricarichiamo immediatamente
-     * tutte le bevute dell'utente.
-     */
     const {
       data: updatedLogs
     } =
       await supabase
         .from(
-          TABLES.drinkLogs
+          sessionTables
+            .drinkLogs
         )
         .select('*')
         .eq(
@@ -1226,10 +1066,6 @@ export default function Home() {
       []
     )
 
-    /*
-     * Verifichiamo se abbiamo
-     * stabilito un nuovo picco BAC.
-     */
     await updateDailyBacPeak(
       userId,
       updatedLogs ||
@@ -1238,15 +1074,12 @@ export default function Home() {
   }
 
   // ==========================================================================
-  // ANNULLA ULTIMA BEVUTA
+  // ANNULLA
   // ==========================================================================
 
-  /*
-   * Cancella l'ultima bevuta
-   * registrata dall'utente.
-   */
   async function handleUndo() {
     if (
+      !sessionTables ||
       logs.length ===
       0
     ) {
@@ -1255,7 +1088,8 @@ export default function Home() {
 
     await supabase
       .from(
-        TABLES.drinkLogs
+        sessionTables
+          .drinkLogs
       )
       .delete()
       .eq(
@@ -1268,9 +1102,6 @@ export default function Home() {
         'user_id'
       )
 
-    /*
-     * Ricarichiamo lo storico.
-     */
     await loadLogs(
       userId
     )
@@ -1280,10 +1111,6 @@ export default function Home() {
   // CAMBIO UTENTE
   // ==========================================================================
 
-  /*
-   * Rimuove l'utente attualmente salvato
-   * dal browser e torna alla pagina iniziale.
-   */
   function handleSwitchUser() {
     const confirmed =
       window.confirm(
@@ -1298,27 +1125,28 @@ export default function Home() {
       'user_id'
     )
 
-    setMenuOpen(false)
+    setMenuOpen(
+      false
+    )
 
     router.push('/')
   }
 
   // ==========================================================================
-  // LIMBO: NON MOSTRARE LA HOME NORMALE
+  // ATTESA SESSIONE
   // ==========================================================================
 
   /*
-   * Il redirect del useEffect avviene
-   * dopo il primo render React.
+   * Durante la query iniziale non mostriamo
+   * la Home per evitare flash dell'interfaccia.
    *
-   * Senza questo controllo potrebbe comparire
-   * per un istante la Home normale prima
-   * dell'apertura di /standby.
-   *
-   * Restituendo null non mostriamo nulla
-   * durante quel brevissimo intervallo.
+   * Se non c'è nessuna sessione,
+   * il useEffect precedente manda a /standby.
    */
-  if (isLimbo) {
+  if (
+    !sessionResolved ||
+    !sessionTables
+  ) {
     return null
   }
 
@@ -1364,10 +1192,6 @@ export default function Home() {
             }
           >
 
-            {/* ------------------------------------------------------------
-                UTENTE ATTUALE
-                ------------------------------------------------------------ */}
-
             <div
               className={
                 styles.menuNickname
@@ -1386,10 +1210,6 @@ export default function Home() {
               Non cambiare utente se non necessario
             </div>
 
-            {/* ------------------------------------------------------------
-                CAMBIO UTENTE
-                ------------------------------------------------------------ */}
-
             <button
               onClick={
                 handleSwitchUser
@@ -1397,10 +1217,6 @@ export default function Home() {
             >
               Cambia utente
             </button>
-
-            {/* ------------------------------------------------------------
-                GRUPPO
-                ------------------------------------------------------------ */}
 
             <button
               onClick={() =>
@@ -1412,10 +1228,6 @@ export default function Home() {
               Gruppo
             </button>
 
-            {/* ------------------------------------------------------------
-                ARCHIVIO VACANZE
-                ------------------------------------------------------------ */}
-
             <button
               onClick={() =>
                 router.push(
@@ -1425,10 +1237,6 @@ export default function Home() {
             >
               Vecchie vacanze
             </button>
-
-            {/* ------------------------------------------------------------
-                VACANZA CORRENTE
-                ------------------------------------------------------------ */}
 
             {vacanzaAttiva && (
               <button
@@ -1441,10 +1249,6 @@ export default function Home() {
                 Vacanza
               </button>
             )}
-
-            {/* ------------------------------------------------------------
-                ADMIN
-                ------------------------------------------------------------ */}
 
             <button
               onClick={() =>
@@ -1461,7 +1265,7 @@ export default function Home() {
       </header>
 
       {/* ================================================================
-          FRASE DIVERTENTE
+          FRASE
           ================================================================ */}
 
       <section
@@ -1485,7 +1289,7 @@ export default function Home() {
       </section>
 
       {/* ================================================================
-          CARD BAC
+          BAC
           ================================================================ */}
 
       <section
@@ -1498,10 +1302,6 @@ export default function Home() {
             styles.bacHeader
           }
         >
-
-          {/* ------------------------------------------------------------
-              BAC CORRENTE
-              ------------------------------------------------------------ */}
 
           <div>
             <div
@@ -1536,10 +1336,6 @@ export default function Home() {
               }
             </div>
           </div>
-
-          {/* ------------------------------------------------------------
-              STIMA RITORNO A ZERO
-              ------------------------------------------------------------ */}
 
           <div
             className={
@@ -1595,10 +1391,6 @@ export default function Home() {
               }
             />
 
-            {/* ----------------------------------------------------------
-                INDICATORE BAC
-                ---------------------------------------------------------- */}
-
             <div
               className={
                 styles.scaleMarker
@@ -1609,10 +1401,6 @@ export default function Home() {
               }}
             />
           </div>
-
-          {/* ------------------------------------------------------------
-              VALORI DI RIFERIMENTO
-              ------------------------------------------------------------ */}
 
           <div
             className={
@@ -1631,7 +1419,7 @@ export default function Home() {
       </section>
 
       {/* ================================================================
-          INSERIMENTO BEVUTE
+          DRINK
           ================================================================ */}
 
       <section
@@ -1646,10 +1434,6 @@ export default function Home() {
         >
           Aggiungi una bevuta
         </h2>
-
-        {/* --------------------------------------------------------------
-            PULSANTI DRINK
-            -------------------------------------------------------------- */}
 
         <div
           className={
@@ -1671,11 +1455,6 @@ export default function Home() {
                   )
                 }
               >
-
-                {/* --------------------------------------------------------
-                    EMOJI
-                    -------------------------------------------------------- */}
-
                 <span
                   className={
                     styles.drinkEmoji
@@ -1685,10 +1464,6 @@ export default function Home() {
                     drink.emoji
                   }
                 </span>
-
-                {/* --------------------------------------------------------
-                    NOME
-                    -------------------------------------------------------- */}
 
                 <span
                   className={
@@ -1700,10 +1475,6 @@ export default function Home() {
                   }
                 </span>
 
-                {/* --------------------------------------------------------
-                    GRADAZIONE
-                    -------------------------------------------------------- */}
-
                 <span
                   className={
                     styles.drinkDetails
@@ -1713,15 +1484,10 @@ export default function Home() {
                     drink.perc_alc
                   }%
                 </span>
-
               </button>
             )
           )}
         </div>
-
-        {/* --------------------------------------------------------------
-            ANNULLA
-            -------------------------------------------------------------- */}
 
         <button
           className={
@@ -1740,7 +1506,7 @@ export default function Home() {
       </section>
 
       {/* ================================================================
-          ULTIME 10 BEVUTE
+          ULTIME BEVUTE
           ================================================================ */}
 
       <section
@@ -1762,17 +1528,8 @@ export default function Home() {
           }
         >
 
-          {/* --------------------------------------------------------------
-              LOG PRESENTI
-              -------------------------------------------------------------- */}
-
           {displayedLogs.map(
             (log) => {
-              /*
-               * drink_logs contiene solamente drink_id.
-               *
-               * Recuperiamo nome ed emoji dalla tabella drinks.
-               */
               const drink =
                 drinks.find(
                   (d) =>
@@ -1793,10 +1550,6 @@ export default function Home() {
                     styles.logRow
                   }
                 >
-
-                  {/* ------------------------------------------------------
-                      DRINK
-                      ------------------------------------------------------ */}
 
                   <div
                     className={
@@ -1819,10 +1572,6 @@ export default function Home() {
                       }
                     </span>
                   </div>
-
-                  {/* ------------------------------------------------------
-                      ORARIO
-                      ------------------------------------------------------ */}
 
                   <span
                     className={
@@ -1847,10 +1596,6 @@ export default function Home() {
               )
             }
           )}
-
-          {/* --------------------------------------------------------------
-              NESSUNA BEVUTA
-              -------------------------------------------------------------- */}
 
           {displayedLogs.length ===
             0 && (

@@ -19,7 +19,7 @@ import {
 import { supabase } from '../../lib/supabase'
 import {
     TABLES,
-    ACTIVE_DATASET_NAME
+    getVacationTables
 } from '../../lib/tableNames'
 import styles from './vacanza.module.css'
 
@@ -105,23 +105,12 @@ export default function VacanzaPage() {
  * In questo modo non confondiamo mai
  * i dati di test con una vera vacanza.
  */
-    const VACANZA_TITLE =
-        ACTIVE_DATASET_NAME === 'test'
-            ? 'VACANZA TEST'
-            : ACTIVE_DATASET_NAME === 'limbo'
-                ? 'LIMBO'
-                : 'VACANZA'
+    const [sessionTables, setSessionTables] = useState(null)
+    const [sessionResolved, setSessionResolved] = useState(false)
 
-    const VACANZA_START = '2026-03-09T12:00:00'
-
-    /*
-     * Timezone utilizzato per raggruppare correttamente
-     * le giornate della vacanza di Creta.
-     *
-     * Anche questo diventerà configurabile quando realizzeremo
-     * un vero sistema multi-vacanza.
-     */
-    const VACATION_TIMEZONE = 'Europe/Athens'
+    const [vacanzaTitle, setVacanzaTitle] = useState('')
+    const [vacanzaStart, setVacanzaStart] = useState(null)
+    const [vacationTimezone, setVacationTimezone] = useState('Europe/Rome')
 
     // ==========================================================================
     // STATO DELLA PAGINA
@@ -278,12 +267,12 @@ export default function VacanzaPage() {
 
         const { data } =
             await supabase
-                .from(TABLES.drinkLogs)
+                .from(sessionTables.drinkLogs)
                 .select('*')
                 .gte(
                     'created_at',
                     new Date(
-                        VACANZA_START
+                        vacanzaStart
                     ).toISOString()
                 )
                 .lte(
@@ -310,12 +299,12 @@ export default function VacanzaPage() {
 
         const { data } =
             await supabase
-                .from(TABLES.dailyBacPeaks)
+                .from(sessionTables.dailyBacPeaks)
                 .select('*')
                 .gte(
                     'peak_time',
                     new Date(
-                        VACANZA_START
+                        vacanzaStart
                     ).toISOString()
                 )
                 .lte(
@@ -948,7 +937,7 @@ export default function VacanzaPage() {
                     '2-digit',
 
                 timeZone:
-                    VACATION_TIMEZONE
+                    vacationTimezone
             }
         )
     }
@@ -975,7 +964,7 @@ export default function VacanzaPage() {
                     'long',
 
                 timeZone:
-                    VACATION_TIMEZONE
+                    vacationTimezone
             }
         )
     }
@@ -1003,16 +992,78 @@ export default function VacanzaPage() {
                     'numeric',
 
                 timeZone:
-                    VACATION_TIMEZONE
+                    vacationTimezone
             }
         )
     }
+
+
+    // ==========================================================================
+    // RISOLUZIONE SESSIONE ATTIVA
+    // ==========================================================================
+
+    useEffect(() => {
+        let cancelled = false
+
+        async function resolveActiveSession() {
+            const { data: config } = await supabase
+                .from(TABLES.appConfig)
+                .select('text_value')
+                .eq('key', 'active_vacation_slug')
+                .maybeSingle()
+
+            const slug =
+                config?.text_value?.trim()
+
+            if (!slug) {
+                setSessionResolved(true)
+                router.replace('/standby')
+                return
+            }
+
+            const tables =
+                getVacationTables(slug)
+
+            const { data: vacation } = await supabase
+                .from('vacations')
+                .select('title, start_at, timezone')
+                .eq('slug', slug)
+                .maybeSingle()
+
+            if (cancelled) return
+
+            setSessionTables(tables)
+            setVacanzaTitle(vacation?.title || slug)
+            setVacanzaStart(vacation?.start_at || null)
+            setVacationTimezone(
+                vacation?.timezone || 'Europe/Rome'
+            )
+
+            setSessionResolved(true)
+        }
+
+        resolveActiveSession()
+
+        return () => {
+            cancelled = true
+        }
+    }, [router])
+
 
     // ==========================================================================
     // CARICAMENTO INIZIALE
     // ==========================================================================
 
+
     useEffect(() => {
+        if (
+            !sessionResolved ||
+            !sessionTables ||
+            !vacanzaStart
+        ) {
+            return
+        }
+
         async function load() {
             // -----------------------------------------------------------------------
             // LOG + PICCHI
@@ -1046,7 +1097,7 @@ export default function VacanzaPage() {
             } =
                 await supabase
                     .from(
-                        TABLES.users
+                        sessionTables.users
                     )
                     .select('*')
                     .order(
@@ -1164,7 +1215,12 @@ export default function VacanzaPage() {
         }
 
         load()
-    }, [])
+
+    }, [
+        sessionResolved,
+        sessionTables,
+        vacanzaStart
+    ])
 
     // ==========================================================================
     // CLASSIFICA ATTIVA
@@ -1774,7 +1830,7 @@ export default function VacanzaPage() {
                 'en-CA',
                 {
                     timeZone:
-                        VACATION_TIMEZONE,
+                        vacationTimezone,
 
                     year:
                         'numeric',
@@ -1971,7 +2027,7 @@ export default function VacanzaPage() {
                     '2-digit',
 
                 timeZone:
-                    VACATION_TIMEZONE
+                    vacationTimezone
             }
         )
     }
@@ -2002,7 +2058,7 @@ export default function VacanzaPage() {
                     '2-digit',
 
                 timeZone:
-                    VACATION_TIMEZONE
+                    vacationTimezone
             }
         )
     }
@@ -2233,7 +2289,7 @@ export default function VacanzaPage() {
                                 styles.title
                             }
                         >
-                            {VACANZA_TITLE}
+                            {vacanzaTitle}
                         </h1>
                     </div>
 
@@ -3470,6 +3526,12 @@ export default function VacanzaPage() {
                                                 )
                                         )
 
+                                    if (
+                                        !sessionResolved ||
+                                        !sessionTables
+                                    ) {
+                                        return null
+                                    }
                                     return (
                                         <div
                                             key={
